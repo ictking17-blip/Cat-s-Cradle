@@ -18,6 +18,16 @@
       padding: calc(10px + env(safe-area-inset-top)) 10px calc(12px + env(safe-area-inset-bottom));
     }
     .app { width: min(560px, 100%); display: grid; gap: 10px; }
+    .panel {
+      background: #ffffff;
+      border-radius: 14px;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, .08);
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+    }
+    .hidden { display: none !important; }
+
     .top-tray {
       display: grid;
       grid-template-columns: 1fr auto;
@@ -40,25 +50,20 @@
       color: #f8fafc;
     }
     .pill strong { color: #93c5fd; }
-    .restart {
+
+    .actions { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; }
+    .btn {
       border: 0;
       border-radius: 10px;
       padding: 10px 13px;
-      background: #22c55e;
-      color: #052e16;
       font-weight: 800;
       cursor: pointer;
+      min-height: 42px;
     }
-    .panel {
-      background: #ffffff;
-      border-radius: 14px;
-      box-shadow: 0 6px 20px rgba(0, 0, 0, .08);
-      padding: 10px;
-      display: grid;
-      gap: 8px;
-    }
+    .btn-green { background: #22c55e; color: #052e16; }
+    .btn-gray { background: #dbe5f5; color: #13223f; }
+
     .room-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .room-status { grid-column: 1 / -1; }
     .room-controls button, .room-controls input, .status {
       border-radius: 10px;
       border: 1px solid #ccdaef;
@@ -66,22 +71,15 @@
       padding: 10px;
       min-height: 42px;
     }
-    .room-controls button {
-      background: #edf3ff;
-      font-weight: 700;
-      cursor: pointer;
-    }
+    .room-controls button { background: #edf3ff; font-weight: 700; cursor: pointer; }
     .room-controls button:disabled { opacity: .55; cursor: not-allowed; }
-    .status {
-      margin: 0;
-      background: #e8f0ff;
-      line-height: 1.35;
-    }
+    .status { margin: 0; background: #e8f0ff; line-height: 1.35; }
+
     .hint { margin: 0; font-size: 12px; opacity: .85; }
     canvas {
       width: 100%;
       height: auto;
-      max-height: calc(100dvh - 290px);
+      max-height: calc(100dvh - 250px);
       border-radius: 10px;
       border: 1px solid #e6ebf5;
       background: #ffffff;
@@ -92,29 +90,37 @@
 </head>
 <body>
 <div class="app">
-  <div class="top-tray">
-    <div class="pill-wrap">
-      <div class="pill" id="turnPill">Turn: -</div>
-      <div class="pill" id="selectedPill">Selected: -</div>
-      <div class="pill" id="rolePill">Role: -</div>
-      <div class="pill" id="connPill">Realtime DB: Connecting...</div>
-    </div>
-    <button id="restart" class="restart">Restart</button>
-  </div>
-
-  <div class="panel">
+  <div id="lobbyPage" class="panel">
+    <h3 style="margin:4px 0 2px;">Online Room</h3>
     <div class="room-controls">
       <button id="createRoom">Create Room</button>
-      <div id="roomLabel" class="status room-status">No room yet.</div>
+      <div id="lobbyRoomLabel" class="status">No room yet.</div>
       <button id="joinRoom">Join Room</button>
       <input id="roomCodeInput" maxlength="5" placeholder="Paste room code" />
     </div>
-    <p class="hint"><strong>Online:</strong> Create a room on one device, join from another device with code.</p>
+    <div id="lobbyStatus" class="status">Create a room or join with code.</div>
+    <p class="hint"><strong>Step:</strong> both players use this page first. After room create/join, game page opens automatically.</p>
   </div>
 
-  <div class="panel">
-    <canvas id="board" width="700" height="1560"></canvas>
-    <div id="status" class="status"></div>
+  <div id="gamePage" class="hidden">
+    <div class="top-tray">
+      <div class="pill-wrap">
+        <div class="pill" id="turnPill">Turn: -</div>
+        <div class="pill" id="selectedPill">Selected: -</div>
+        <div class="pill" id="rolePill">Role: -</div>
+        <div class="pill" id="connPill">Realtime DB: Connecting...</div>
+      </div>
+      <div class="actions">
+        <button id="restart" class="btn btn-green">Restart</button>
+        <button id="copyCode" class="btn btn-gray">Copy Code</button>
+        <button id="leaveRoom" class="btn btn-gray">Leave</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <canvas id="board" width="700" height="1560"></canvas>
+      <div id="status" class="status"></div>
+    </div>
   </div>
 </div>
 
@@ -136,10 +142,17 @@ const firebaseConfig = {
   databaseURL: 'https://cats-cradle-10e30-default-rtdb.europe-west1.firebasedatabase.app'
 };
 
+const lobbyPage = document.getElementById('lobbyPage');
+const gamePage = document.getElementById('gamePage');
+const lobbyStatusEl = document.getElementById('lobbyStatus');
+const lobbyRoomLabelEl = document.getElementById('lobbyRoomLabel');
+
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
 const statusEl = document.getElementById('status');
 const restartBtn = document.getElementById('restart');
+const copyCodeBtn = document.getElementById('copyCode');
+const leaveRoomBtn = document.getElementById('leaveRoom');
 const turnPillEl = document.getElementById('turnPill');
 const selectedPillEl = document.getElementById('selectedPill');
 const rolePillEl = document.getElementById('rolePill');
@@ -147,12 +160,10 @@ const connPillEl = document.getElementById('connPill');
 const createRoomBtn = document.getElementById('createRoom');
 const joinRoomBtn = document.getElementById('joinRoom');
 const roomCodeInput = document.getElementById('roomCodeInput');
-const roomLabel = document.getElementById('roomLabel');
 
 if (window.__catsCradleFileMode) {
   const msg = 'Opened with file://. Start local server: python3 -m http.server 4173 then open http://localhost:4173';
-  statusEl.textContent = msg;
-  connPillEl.innerHTML = '<strong>Realtime DB:</strong> Blocked on file://';
+  lobbyStatusEl.textContent = msg;
   createRoomBtn.disabled = true;
   joinRoomBtn.disabled = true;
   throw new Error(msg);
@@ -163,12 +174,8 @@ const db = getDatabase(app);
 
 const HOUSE = { id: 'H', x: 350, y: 150, r: 28 };
 function createGridPoints() {
-  const columns = 3;
-  const rows = 4;
-  const left = 155;
-  const right = 545;
-  const top = 360;
-  const bottom = 1170;
+  const columns = 3, rows = 4;
+  const left = 155, right = 545, top = 360, bottom = 1170;
   const xStep = (right - left) / (columns - 1);
   const yStep = (bottom - top) / (rows - 1);
   const points = [];
@@ -185,13 +192,8 @@ const POINTS = createGridPoints();
 
 function initialGame(waiting = false) {
   return {
-    visited: [],
-    lines: [],
-    currentId: 'H',
-    caller: 'p1',
-    drawer: 'p2',
-    selectedTarget: null,
-    gameOver: false,
+    visited: [], lines: [], currentId: 'H', caller: 'p1', drawer: 'p2',
+    selectedTarget: null, gameOver: false,
     status: waiting ? 'Waiting for Player 2 to join room...' : 'Player 1: select a number for Player 2 to draw.'
   };
 }
@@ -212,12 +214,18 @@ const state = {
   players: { p1: false, p2: false },
   game: initialGame(),
   drawing: null,
-  unsubscribe: null
+  unsubscribe: null,
+  inGamePage: false
 };
+
+function logError(context, err) {
+  console.error(`[CatGame] ${context}`, err);
+}
 
 function label(playerId) { return playerId === 'p1' ? 'Player 1' : 'Player 2'; }
 function pointById(id) { return id === 'H' ? HOUSE : POINTS.find((p) => p.id === Number(id)); }
 function setStatus(msg) { statusEl.textContent = msg; }
+function setLobbyStatus(msg) { lobbyStatusEl.textContent = msg; }
 function canPlay() { return Boolean(state.roomCode && state.players.p1 && state.players.p2); }
 function roomPath(code) { return ref(db, `rooms/${code}`); }
 function randomCode() { return Math.random().toString(36).slice(2, 7).toUpperCase(); }
@@ -230,17 +238,28 @@ function determineRole(players) {
 }
 function friendlyError(err, fallback) {
   const message = String(err?.message || fallback);
-  if (message.includes('permission_denied')) return 'Permission denied. Paste Realtime DB rules from README and publish.';
-  if (message.includes('network')) return 'Network issue. Check internet connection and try again.';
+  if (message.includes('permission_denied')) return 'Permission denied. Check Realtime DB rules and click Publish.';
+  if (message.includes('network')) return 'Network issue. Check internet connection and retry.';
   return message;
 }
+
+function enterGamePage() {
+  state.inGamePage = true;
+  lobbyPage.classList.add('hidden');
+  gamePage.classList.remove('hidden');
+}
+function enterLobbyPage() {
+  state.inGamePage = false;
+  gamePage.classList.add('hidden');
+  lobbyPage.classList.remove('hidden');
+}
+
 function pointOnCircle(center, approachPoint, radius) {
   const dx = center.x - approachPoint.x;
   const dy = center.y - approachPoint.y;
   const len = Math.hypot(dx, dy) || 1;
   return { x: center.x - (dx / len) * radius, y: center.y - (dy / len) * radius };
 }
-
 function toSegments(path) {
   const segs = [];
   for (let i = 1; i < path.length; i++) segs.push({ a: path[i - 1], b: path[i] });
@@ -275,7 +294,7 @@ function updateTopTray() {
   const selected = game.selectedTarget == null ? 'None' : (game.selectedTarget === 'H' ? 'Cat House' : game.selectedTarget);
   selectedPillEl.innerHTML = `<strong>Selected:</strong> ${selected}`;
   rolePillEl.innerHTML = `<strong>You:</strong> ${state.yourRole ? label(state.yourRole) : '-'}`;
-  roomLabel.textContent = state.roomCode ? `Room ${state.roomCode} • ${state.players.p1 ? 'P1✅' : 'P1❌'} ${state.players.p2 ? 'P2✅' : 'P2❌'}` : 'No room yet.';
+  lobbyRoomLabelEl.textContent = state.roomCode ? `Room ${state.roomCode} • ${state.players.p1 ? 'P1✅' : 'P1❌'} ${state.players.p2 ? 'P2✅' : 'P2❌'}` : 'No room yet.';
 }
 
 function drawPath(points, color, width) {
@@ -297,7 +316,6 @@ function drawNode(point, active = false) {
   ctx.arc(point.x, point.y, point.r, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
-
   ctx.fillStyle = '#0f172a';
   ctx.font = '700 22px Arial';
   ctx.textAlign = 'center';
@@ -307,7 +325,6 @@ function drawNode(point, active = false) {
 function draw() {
   const game = state.game;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-
   for (const line of game.lines || []) drawPath(line.points, line.drawer === 'p1' ? '#2563eb' : '#16a34a', 2.5);
   if (state.drawing) drawPath(state.drawing, '#dc2626', 2);
 
@@ -318,7 +335,6 @@ function draw() {
   ctx.arc(HOUSE.x, HOUSE.y, HOUSE.r, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
-
   ctx.fillStyle = '#78350f';
   ctx.font = '700 12px Arial';
   ctx.textAlign = 'center';
@@ -332,7 +348,7 @@ function draw() {
 
 async function createRoom() {
   createRoomBtn.disabled = true;
-  setStatus('Creating room...');
+  setLobbyStatus('Creating room...');
   try {
     let code = randomCode();
     let available = false;
@@ -344,7 +360,7 @@ async function createRoom() {
       }
       code = randomCode();
     }
-    if (!available) throw new Error('Could not generate an empty room code. Please retry.');
+    if (!available) throw new Error('Could not generate empty room code. Retry.');
 
     await set(roomPath(code), {
       players: { p1: deviceId, p2: null },
@@ -353,10 +369,12 @@ async function createRoom() {
     });
 
     roomCodeInput.value = code;
+    setLobbyStatus(`Room ${code} created. Share code with Player 2.`);
     subscribeRoom(code);
-    setStatus(`Room ${code} created. Share code with Player 2.`);
+    enterGamePage();
   } catch (err) {
-    setStatus(friendlyError(err, 'Could not create room.'));
+    logError('createRoom failed', err);
+    setLobbyStatus(friendlyError(err, 'Could not create room.'));
   } finally {
     createRoomBtn.disabled = false;
   }
@@ -369,8 +387,13 @@ function subscribeRoom(code) {
   state.unsubscribe = onValue(roomPath(code), (snap) => {
     state.connected = true;
     if (!snap.exists()) {
-      setStatus('Room not found.');
+      setLobbyStatus('Room not found or removed.');
+      setStatus('Room not found or removed.');
       state.roomCode = null;
+      state.players = { p1: false, p2: false };
+      state.yourRole = null;
+      state.game = initialGame();
+      enterLobbyPage();
       draw();
       return;
     }
@@ -381,10 +404,13 @@ function subscribeRoom(code) {
     state.yourRole = determineRole(players);
     state.game = data.game || initialGame();
     state.drawing = null;
+    setStatus(state.game.status || 'Game ready.');
     draw();
   }, (err) => {
     state.connected = false;
+    logError('room subscription error', err);
     setStatus(friendlyError(err, 'Realtime DB connection issue.'));
+    setLobbyStatus(friendlyError(err, 'Realtime DB connection issue.'));
     draw();
   });
 }
@@ -392,50 +418,65 @@ function subscribeRoom(code) {
 async function joinRoomByCode(rawCode) {
   const code = String(rawCode || '').trim().toUpperCase();
   if (code.length !== 5) {
-    setStatus('Room code must be 5 characters.');
+    setLobbyStatus('Room code must be 5 characters.');
     return;
   }
 
   joinRoomBtn.disabled = true;
-  setStatus(`Joining room ${code}...`);
+  setLobbyStatus(`Joining room ${code}...`);
+
   try {
-    let committed = false;
-    for (let attempt = 0; attempt < 4 && !committed; attempt++) {
-      const result = await runTransaction(roomPath(code), (current) => {
-        if (!current) return;
-        const players = current.players || {};
+    let joined = false;
+    for (let attempt = 0; attempt < 4 && !joined; attempt++) {
+      const snap = await get(roomPath(code));
+      if (!snap.exists()) {
+        setLobbyStatus('Room code not found.');
+        return;
+      }
 
-        if (players.p1 !== deviceId && players.p2 !== deviceId) {
-          if (!players.p1) players.p1 = deviceId;
-          else if (!players.p2) players.p2 = deviceId;
-          else return;
-        }
+      const data = snap.val() || {};
+      const players = data.players || {};
 
-        const bothReady = Boolean(players.p1 && players.p2);
-        const game = current.game || initialGame();
-        game.status = bothReady ? 'Player 1: select a number for Player 2 to draw.' : 'Waiting for Player 2 to join room...';
-        return { ...current, players, game, updatedAt: Date.now() };
-      });
-      committed = Boolean(result?.committed);
-      if (!committed) await new Promise((resolve) => setTimeout(resolve, 250));
+      if (players.p1 === deviceId || players.p2 === deviceId) {
+        joined = true;
+      } else if (!players.p1) {
+        await update(roomPath(code), { 'players/p1': deviceId, updatedAt: Date.now() });
+        joined = true;
+      } else if (!players.p2) {
+        await update(roomPath(code), { 'players/p2': deviceId, updatedAt: Date.now() });
+        joined = true;
+      } else {
+        setLobbyStatus('Room is full.');
+        return;
+      }
+
+      if (!joined) await new Promise((resolve) => setTimeout(resolve, 220));
     }
 
-    if (!committed) {
-      const existing = await get(roomPath(code));
-      if (!existing.exists()) setStatus('Room code not found.');
-      else {
-        const players = existing.val()?.players || {};
-        const openSeat = !players.p1 || !players.p2 || players.p1 === deviceId || players.p2 === deviceId;
-        setStatus(openSeat ? 'Join retry failed. Tap Join Room again.' : 'Room is full.');
-      }
+    if (!joined) {
+      setLobbyStatus('Could not join room. Please retry.');
       return;
     }
 
+    const latest = await get(roomPath(code));
+    const latestData = latest.val() || {};
+    const players = latestData.players || {};
+    const bothReady = Boolean(players.p1 && players.p2);
+    await update(roomPath(code), {
+      updatedAt: Date.now(),
+      game: {
+        ...(latestData.game || initialGame()),
+        status: bothReady ? 'Player 1: select a number for Player 2 to draw.' : 'Waiting for Player 2 to join room...'
+      }
+    });
+
     roomCodeInput.value = code;
+    setLobbyStatus(`Joined room ${code}.`);
     subscribeRoom(code);
-    setStatus(`Joined room ${code}.`);
+    enterGamePage();
   } catch (err) {
-    setStatus(friendlyError(err, 'Join failed.'));
+    logError('joinRoomByCode failed', err);
+    setLobbyStatus(friendlyError(err, 'Join failed.'));
   } finally {
     joinRoomBtn.disabled = false;
   }
@@ -456,6 +497,7 @@ async function submitSelection(targetId) {
       return { ...current, game, updatedAt: Date.now() };
     });
   } catch (err) {
+    logError('submitSelection failed', err);
     setStatus(friendlyError(err, 'Could not select target.'));
   }
 }
@@ -518,6 +560,7 @@ async function submitPath(rawPath) {
       return { ...current, game, updatedAt: Date.now() };
     });
   } catch (err) {
+    logError('submitPath failed', err);
     setStatus(friendlyError(err, 'Could not submit draw.'));
   }
 }
@@ -533,7 +576,35 @@ async function restartRoom() {
       updatedAt: Date.now()
     });
   } catch (err) {
+    logError('restartRoom failed', err);
     setStatus(friendlyError(err, 'Could not restart room.'));
+  }
+}
+
+function leaveRoom() {
+  if (state.unsubscribe) {
+    state.unsubscribe();
+    state.unsubscribe = null;
+  }
+  state.roomCode = null;
+  state.yourRole = null;
+  state.players = { p1: false, p2: false };
+  state.game = initialGame();
+  state.drawing = null;
+  setLobbyStatus('Left room. Create or join another room.');
+  setStatus('Left room.');
+  enterLobbyPage();
+  draw();
+}
+
+async function copyRoomCode() {
+  if (!state.roomCode) return;
+  try {
+    await navigator.clipboard.writeText(state.roomCode);
+    setStatus(`Copied room code: ${state.roomCode}`);
+  } catch (err) {
+    logError('copyRoomCode failed', err);
+    setStatus(`Room code: ${state.roomCode}`);
   }
 }
 
@@ -570,7 +641,6 @@ function startDraw(e) {
   if (dist(pos, from) > from.r + 16) return;
   state.drawing = [{ x: from.x, y: from.y }];
 }
-
 function moveDraw(e) {
   if (!state.drawing) return;
   const pos = pointerPos(e);
@@ -585,10 +655,8 @@ function moveDraw(e) {
   }
   draw();
 }
-
 function finalizeDraw() {
   if (!state.drawing) return;
-
   const game = state.game;
   const target = pointById(game.selectedTarget);
   const end = state.drawing.at(-1);
@@ -600,7 +668,6 @@ function finalizeDraw() {
     draw();
     return;
   }
-
   const prev = path[path.length - 2] || path[0];
   path.push(pointOnCircle(target, prev, target.r));
   submitPath(path);
@@ -610,6 +677,8 @@ createRoomBtn.addEventListener('click', createRoom);
 joinRoomBtn.addEventListener('click', () => joinRoomByCode(roomCodeInput.value));
 roomCodeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') joinRoomByCode(roomCodeInput.value); });
 restartBtn.addEventListener('click', restartRoom);
+copyCodeBtn.addEventListener('click', copyRoomCode);
+leaveRoomBtn.addEventListener('click', leaveRoom);
 
 canvas.addEventListener('click', boardClick);
 canvas.addEventListener('mousedown', startDraw);
@@ -620,7 +689,9 @@ canvas.addEventListener('touchstart', (e) => { startDraw(e); e.preventDefault();
 canvas.addEventListener('touchmove', (e) => { moveDraw(e); e.preventDefault(); }, { passive: false });
 canvas.addEventListener('touchend', (e) => { finalizeDraw(); e.preventDefault(); }, { passive: false });
 
-setStatus('Ready. Create room or join with code.');
+setStatus('Waiting for room...');
+setLobbyStatus('Create a room or join with code.');
+enterLobbyPage();
 draw();
 </script>
 </body>
