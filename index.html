@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cat's Cradle Duel</title>
+  <style>
+    :root { color-scheme: light; }
+    body {
+      margin: 0;
+      font-family: Inter, Arial, sans-serif;
+      background: #f5f7fb;
+      color: #14213d;
+      display: flex;
+      justify-content: center;
+      padding: 20px;
+    }
+    .app { width: min(980px, 100%); }
+    h1 { margin: 0 0 8px; }
+    .panel { display: grid; gap: 12px; grid-template-columns: 2fr 1fr; }
+    .board-wrap {
+      background: #fff;
+      border-radius: 14px;
+      box-shadow: 0 6px 20px rgba(0,0,0,.08);
+      padding: 10px;
+    }
+    canvas {
+      width: 100%;
+      height: auto;
+      touch-action: none;
+      border-radius: 10px;
+      background: #ffffff;
+      border: 1px solid #e6ebf5;
+    }
+    .controls {
+      background: #fff;
+      border-radius: 14px;
+      box-shadow: 0 6px 20px rgba(0,0,0,.08);
+      padding: 14px;
+      align-self: start;
+    }
+    .numbers { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin: 10px 0; }
+    button {
+      border: none;
+      border-radius: 10px;
+      padding: 10px;
+      font-weight: 600;
+      background: #2563eb;
+      color: #fff;
+      cursor: pointer;
+    }
+    button[disabled] { opacity: .4; cursor: not-allowed; }
+    .small { background: #0ea5a6; margin-top: 8px; width: 100%; }
+    .status {
+      font-size: 14px;
+      line-height: 1.35;
+      background: #f0f5ff;
+      padding: 10px;
+      border-radius: 8px;
+      min-height: 56px;
+      margin-bottom: 8px;
+    }
+    .turn-chip {
+      display: inline-block;
+      margin: 4px 0 10px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: #e0ecff;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .2px;
+    }
+    .legend { font-size: 13px; color: #4b5563; }
+    ul { margin-top: 6px; padding-left: 18px; }
+    @media (max-width: 850px) { .panel { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<div class="app">
+  <h1>Cat House Strategy Game (2 Player Local)</h1>
+  <p class="legend">Caller chooses a number. Drawer must connect from current point to selected target without crossing lines or touching other nodes.</p>
+  <div class="panel">
+    <div class="board-wrap"><canvas id="board" width="700" height="900"></canvas></div>
+    <div class="controls">
+      <div><strong>Available numbers</strong></div>
+      <div id="numbers" class="numbers"></div>
+      <button id="restart" class="small">Restart</button>
+      <h3>Turn</h3>
+      <div id="turnChip" class="turn-chip"></div>
+      <div id="status" class="status"></div>
+      <div><strong>How turns work</strong></div>
+      <ul>
+        <li>Player 1 calls, Player 2 draws.</li>
+        <li>Then Player 2 calls, Player 1 draws.</li>
+        <li>Repeat until all numbers are used.</li>
+        <li>Final move: connect the last point back to Cat House.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+<script>
+const canvas = document.getElementById('board');
+const ctx = canvas.getContext('2d');
+const statusEl = document.getElementById('status');
+const numbersEl = document.getElementById('numbers');
+const restartBtn = document.getElementById('restart');
+const turnChipEl = document.getElementById('turnChip');
+
+const HOUSE = { id: 'H', x: 350, y: 80, r: 26 };
+const POINTS = [
+  {id:1,x:150,y:210},{id:2,x:330,y:210},{id:3,x:520,y:210},
+  {id:4,x:120,y:360},{id:5,x:300,y:360},{id:6,x:510,y:360},
+  {id:7,x:130,y:510},{id:8,x:320,y:510},{id:9,x:520,y:510},
+  {id:10,x:140,y:680},{id:11,x:350,y:680},{id:12,x:540,y:680}
+].map(p => ({...p, r: 22}));
+
+let state;
+
+function init() {
+  state = {
+    visited: new Set(),
+    lines: [], // {fromId,toId,drawer,points}
+    currentId: 'H',
+    caller: 'p1',
+    drawer: 'p2',
+    selectedTarget: null,
+    gameOver: false,
+    drawing: null,
+  };
+  buildNumberButtons();
+  updateTurnChip();
+  setStatus('Player 1: choose the first number for Player 2 to draw from Cat House.');
+  draw();
+}
+
+function label(playerId) {
+  return playerId === 'p1' ? 'Player 1' : 'Player 2';
+}
+
+function pointById(id) {
+  if (id === 'H') return HOUSE;
+  return POINTS.find(p => p.id === id);
+}
+
+function setStatus(msg){ statusEl.textContent = msg; }
+
+function updateTurnChip(){
+  turnChipEl.textContent = `${label(state.caller)} calls → ${label(state.drawer)} draws`;
+}
+
+function buildNumberButtons(){
+  numbersEl.innerHTML = '';
+  const remaining = POINTS.filter(p => !state.visited.has(p.id));
+  remaining.forEach(p => {
+    const b = document.createElement('button');
+    b.textContent = p.id;
+    b.disabled = !!state.selectedTarget || state.gameOver;
+    b.addEventListener('click', () => chooseTarget(p.id));
+    numbersEl.appendChild(b);
+  });
+}
+
+function chooseTarget(id){
+  if (state.gameOver || state.selectedTarget || state.visited.has(id)) return;
+  state.selectedTarget = id;
+  buildNumberButtons();
+  updateTurnChip();
+  setStatus(`${label(state.caller)} called ${id}. ${label(state.drawer)} now draw from ${state.currentId} to ${id}.`);
+  draw();
+}
+
+function switchRoles(){
+  [state.caller, state.drawer] = [state.drawer, state.caller];
+  updateTurnChip();
+}
+
+function afterSuccessfulDraw(targetId, points){
+  state.lines.push({fromId: state.currentId, toId: targetId, drawer: state.drawer, points});
+  if (targetId !== 'H') state.visited.add(targetId);
+  state.currentId = targetId;
+
+  if (targetId === 'H' && state.visited.size === POINTS.length) {
+    state.gameOver = true;
+    setStatus(`${label(state.drawer)} wins by returning to Cat House on the final move!`);
+    buildNumberButtons();
+    draw();
+    return;
+  }
+
+  state.selectedTarget = null;
+  switchRoles();
+
+  if (state.visited.size === POINTS.length) {
+    setStatus(`${label(state.caller)}: no numbers left. Call Cat House return. ${label(state.drawer)} must draw from ${state.currentId} back to Cat House.`);
+    state.selectedTarget = 'H';
+  } else {
+    setStatus(`${label(state.caller)}: choose a number for ${label(state.drawer)} to draw.`);
+  }
+
+  buildNumberButtons();
+  draw();
+}
+
+function loseInvalidDraw(){
+  state.gameOver = true;
+  const winner = state.drawer === 'p1' ? 'p2' : 'p1';
+  setStatus(`${label(state.drawer)} made an invalid path. ${label(winner)} wins.`);
+  buildNumberButtons();
+  draw();
+}
+
+function dist(a,b){ return Math.hypot(a.x-b.x,a.y-b.y); }
+
+function isValidPath(path, fromId, toId){
+  for (const p of path) {
+    if (p.x < 15 || p.y < 15 || p.x > canvas.width - 15 || p.y > canvas.height - 15) return false;
+  }
+
+  const blocked = POINTS.filter(p => p.id !== fromId && p.id !== toId);
+  for (const p of path) {
+    for (const n of blocked) {
+      if (dist(p,n) < n.r + 6) return false;
+    }
+    if (fromId !== 'H' && toId !== 'H' && dist(p,HOUSE) < HOUSE.r + 8) return false;
+  }
+
+  const segs = toSegments(path);
+  for (const line of state.lines) {
+    const prev = toSegments(line.points);
+    for (const s1 of segs) {
+      for (const s2 of prev) {
+        if (segmentsIntersect(s1.a,s1.b,s2.a,s2.b)) return false;
+      }
+    }
+  }
+  return true;
+}
+
+function toSegments(path){
+  const segs=[];
+  for(let i=1;i<path.length;i++) segs.push({a:path[i-1], b:path[i]});
+  return segs;
+}
+
+function ccw(a,b,c){ return (c.y-a.y)*(b.x-a.x) > (b.y-a.y)*(c.x-a.x); }
+function segmentsIntersect(a,b,c,d){
+  if ((a.x===c.x&&a.y===c.y)||(a.x===d.x&&a.y===d.y)||(b.x===c.x&&b.y===c.y)||(b.x===d.x&&b.y===d.y)) return false;
+  return ccw(a,c,d) !== ccw(b,c,d) && ccw(a,b,c) !== ccw(a,b,d);
+}
+
+function pointerPos(e){
+  const rect = canvas.getBoundingClientRect();
+  const t = e.touches ? e.touches[0] : e;
+  return {
+    x: (t.clientX - rect.left) * (canvas.width / rect.width),
+    y: (t.clientY - rect.top) * (canvas.height / rect.height)
+  };
+}
+
+function startDraw(e){
+  if (state.gameOver || !state.selectedTarget) return;
+  const from = pointById(state.currentId);
+  const pos = pointerPos(e);
+  if (dist(pos, from) > from.r + 16) return;
+  state.drawing = [{x:from.x, y:from.y}];
+}
+
+function moveDraw(e){
+  if (!state.drawing) return;
+  const pos = pointerPos(e);
+  const last = state.drawing.at(-1);
+  if (dist(pos, last) > 3) state.drawing.push(pos);
+  draw();
+}
+
+function endDraw(){
+  if (!state.drawing) return;
+  const target = pointById(state.selectedTarget);
+  const end = state.drawing.at(-1);
+  const path = [...state.drawing];
+  state.drawing = null;
+
+  if (dist(end, target) > target.r + 16) {
+    setStatus(`Path must end on ${state.selectedTarget === 'H' ? 'Cat House' : `number ${state.selectedTarget}`}. Draw again.`);
+    draw();
+    return;
+  }
+
+  path.push({x:target.x, y:target.y});
+  if (!isValidPath(path, state.currentId, state.selectedTarget)) {
+    loseInvalidDraw();
+    return;
+  }
+  afterSuccessfulDraw(state.selectedTarget, path);
+}
+
+function drawPath(points,color,width=4){
+  if(points.length<2) return;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(points[0].x,points[0].y);
+  for(let i=1;i<points.length;i++) ctx.lineTo(points[i].x,points[i].y);
+  ctx.stroke();
+}
+
+function drawNode(p, active=false){
+  ctx.fillStyle = active ? '#f97316' : '#fff';
+  ctx.strokeStyle = '#0f172a';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#0f172a';
+  ctx.font = 'bold 20px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(String(p.id), p.x, p.y + 1);
+}
+
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  for(const line of state.lines){
+    drawPath(line.points, line.drawer === 'p1' ? '#1d4ed8' : '#16a34a', 5);
+  }
+  if(state.drawing) drawPath(state.drawing, '#dc2626', 3);
+
+  ctx.fillStyle = '#fde68a';
+  ctx.strokeStyle = '#7c2d12';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(HOUSE.x,HOUSE.y,HOUSE.r,0,Math.PI*2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#7c2d12';
+  ctx.font = 'bold 13px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('CAT', HOUSE.x, HOUSE.y-4);
+  ctx.fillText('HOUSE', HOUSE.x, HOUSE.y+10);
+
+  POINTS.forEach(p => drawNode(p, state.selectedTarget === p.id));
+
+  ctx.fillStyle = '#111827';
+  ctx.font = 'bold 16px Arial';
+  ctx.fillText('P1', 70, 40);
+  ctx.fillText('P2', 620, 860);
+}
+
+canvas.addEventListener('mousedown', startDraw);
+canvas.addEventListener('mousemove', moveDraw);
+canvas.addEventListener('mouseup', endDraw);
+canvas.addEventListener('mouseleave', endDraw);
+canvas.addEventListener('touchstart', e => { startDraw(e); e.preventDefault(); }, {passive:false});
+canvas.addEventListener('touchmove', e => { moveDraw(e); e.preventDefault(); }, {passive:false});
+canvas.addEventListener('touchend', e => { endDraw(e); e.preventDefault(); }, {passive:false});
+restartBtn.addEventListener('click', init);
+
+init();
+</script>
+</body>
+</html>
