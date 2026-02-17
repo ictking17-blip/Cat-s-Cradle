@@ -1,12 +1,13 @@
-# Cat's Cradle (Online Multiplayer)
+# Cat's Cradle (Firebase Online Multiplayer)
 
-Realtime 2-player Cat's Cradle game for different phones over the internet.
+Realtime 2-player Cat's Cradle game using **Firebase Firestore** (no custom Node server required).
 
-## Local run
+## Run locally
+
+Because Firebase SDK is loaded via browser modules, run any static server:
 
 ```bash
-npm install
-npm start
+python3 -m http.server 4173
 ```
 
 Open `http://localhost:4173`.
@@ -14,22 +15,41 @@ Open `http://localhost:4173`.
 ## How to play online
 
 1. Player 1 taps **Create Room** and shares the room code.
-2. Player 2 enters the code and taps **Join Room**.
-3. Caller selects number by tapping a number node.
-4. Drawer draws from current node to selected number.
-5. Turns alternate after each valid draw.
+2. Player 2 enters the same code and taps **Join Room**.
+3. Caller selects a number node.
+4. Drawer draws from current node to selected target.
+5. Turns alternate after valid moves.
 6. Invalid draw retries same turn.
-7. After all numbers are connected, return to Cat House to win.
+7. After all numbers are connected, final return to Cat House wins.
 
-## Free hosting suggestion
+## Firebase setup required
 
-Use **Render** (free tier):
+This project is wired to your Firebase app config (`cats-cradle-10e30`).
 
-1. Push this repo to GitHub.
-2. Create a new Web Service on Render and connect the repo.
-3. Build command: `npm install`
-4. Start command: `npm start`
-5. Render gives public HTTPS URL.
-6. Open that URL on both phones, create/join room code, and play.
+1. In Firebase Console, enable **Cloud Firestore** (production or test mode).
+2. Set Firestore rules for the `rooms` collection (example starter rules):
 
-WebSocket is automatic (`ws://` locally, `wss://` on HTTPS).
+```txt
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /rooms/{roomId} {
+      allow read, write: if true;
+    }
+  }
+}
+```
+
+> For production, tighten these rules with auth/validation.
+
+## Deploy (free)
+
+Best simple option: **Firebase Hosting**
+
+1. `npm i -g firebase-tools`
+2. `firebase login`
+3. `firebase init hosting` (select existing project `cats-cradle-10e30`)
+4. Set public dir to `.` and configure as single-page app: `No`
+5. `firebase deploy`
+
+Then open hosting URL on both phones and play with room codes.

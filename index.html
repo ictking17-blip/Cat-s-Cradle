@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cat's Cradle Duel Online</title>
+  <title>Cat's Cradle Duel (Firebase Online)</title>
   <style>
     :root { color-scheme: light; }
     body { margin:0; font-family:Inter,Arial,sans-serif; background:linear-gradient(180deg,#f0f4ff 0%,#f7fbff 100%); color:#14213d; display:flex; justify-content:center; min-height:100dvh; padding:calc(10px + env(safe-area-inset-top)) 10px calc(10px + env(safe-area-inset-bottom)); box-sizing:border-box; }
@@ -29,7 +29,7 @@
       <div class="pill" id="turnPill">Turn: -</div>
       <div class="pill" id="selectedPill">Selected: -</div>
       <div class="pill" id="rolePill">Role: -</div>
-      <div class="pill" id="connPill">Server: Connecting...</div>
+      <div class="pill" id="connPill">Firebase: Connecting...</div>
     </div>
     <button id="restart" class="restart">Restart</button>
   </div>
@@ -41,7 +41,7 @@
       <button id="joinRoom">Join Room</button>
       <div id="roomLabel" class="status">No room yet.</div>
     </div>
-    <p class="small"><strong>Online mode active:</strong> Share room code with the second player. Works across internet when deployed.</p>
+    <p class="small"><strong>Firebase online mode:</strong> Create room and share code with the second player.</p>
   </div>
 
   <div class="panel">
@@ -50,7 +50,22 @@
   </div>
 </div>
 
-<script>
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js';
+import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, runTransaction, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js';
+
+const firebaseConfig = {
+  apiKey: 'AIzaSyB9B1ZXYPep-PeNeo_D35Kf1kofpB9GR3Q',
+  authDomain: 'cats-cradle-10e30.firebaseapp.com',
+  projectId: 'cats-cradle-10e30',
+  storageBucket: 'cats-cradle-10e30.firebasestorage.app',
+  messagingSenderId: '807058658558',
+  appId: '1:807058658558:web:060f0292e84b0bcfde81af'
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
 const statusEl = document.getElementById('status');
@@ -65,6 +80,16 @@ const roomCodeInput = document.getElementById('roomCodeInput');
 const roomLabel = document.getElementById('roomLabel');
 
 const HOUSE = { id: 'H', x: 350, y: 140, r: 24 };
+const ROOM_COLLECTION = 'rooms';
+
+const deviceId = (() => {
+  const existing = localStorage.getItem('cats_cradle_device_id');
+  if (existing) return existing;
+  const value = crypto.randomUUID();
+  localStorage.setItem('cats_cradle_device_id', value);
+  return value;
+})();
+
 function createGridPoints() {
   const columns = 3, rows = 4, left = 140, right = 560, top = 360, bottom = 1140;
   const xStep = (right - left) / (columns - 1);
@@ -76,20 +101,31 @@ function createGridPoints() {
 }
 const POINTS = createGridPoints();
 
+function initialGame(waiting = false) {
+  return {
+    visited: [],
+    lines: [],
+    currentId: 'H',
+    caller: 'p1',
+    drawer: 'p2',
+    selectedTarget: null,
+    gameOver: false,
+    status: waiting ? 'Waiting for Player 2 to join room...' : 'Player 1: select a number for Player 2 to draw.'
+  };
+}
+
 const state = {
-  connected: false,
+  connected: true,
   roomCode: null,
   yourRole: null,
   players: { p1: false, p2: false },
-  game: { visited: [], lines: [], currentId: 'H', caller: 'p1', drawer: 'p2', selectedTarget: null, gameOver: false, status: 'Connect and create/join a room.' },
-  drawing: null
+  game: initialGame(),
+  drawing: null,
+  unsub: null
 };
 
-const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-const ws = new WebSocket(`${wsProtocol}//${location.host}`);
-
 function label(playerId) { return playerId === 'p1' ? 'Player 1' : 'Player 2'; }
-function pointById(id) { return id === 'H' ? HOUSE : POINTS.find(p => p.id === id); }
+function pointById(id) { return id === 'H' ? HOUSE : POINTS.find((p) => p.id === id); }
 function setStatus(msg) { statusEl.textContent = msg; }
 function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
 function pointOnCircle(center, approachPoint, radius) {
@@ -98,17 +134,42 @@ function pointOnCircle(center, approachPoint, radius) {
   const len = Math.hypot(dx, dy) || 1;
   return { x: center.x - (dx / len) * radius, y: center.y - (dy / len) * radius };
 }
-function canPlay() { return state.connected && state.roomCode && state.players.p1 && state.players.p2; }
+function canPlay() { return state.roomCode && state.players.p1 && state.players.p2; }
+
+function toSegments(path) {
+  const segs = [];
+  for (let i = 1; i < path.length; i++) segs.push({ a: path[i - 1], b: path[i] });
+  return segs;
+}
+function ccw(a, b, c) { return (c.y - a.y) * (b.x - a.x) > (b.y - a.y) * (c.x - a.x); }
+function segmentsIntersect(a, b, c, d) {
+  if ((a.x === c.x && a.y === c.y) || (a.x === d.x && a.y === d.y) || (b.x === c.x && b.y === c.y) || (b.x === d.x && b.y === d.y)) return false;
+  return ccw(a, c, d) !== ccw(b, c, d) && ccw(a, b, c) !== ccw(a, b, d);
+}
+function isValidPath(game, path, fromId, toId) {
+  for (const p of path) if (p.x < 15 || p.y < 15 || p.x > 700 - 15 || p.y > 1560 - 15) return false;
+  const blocked = POINTS.filter((p) => p.id !== fromId && p.id !== toId);
+  for (const p of path) {
+    for (const n of blocked) if (dist(p, n) < n.r + 5) return false;
+    if (fromId !== 'H' && toId !== 'H' && dist(p, HOUSE) < HOUSE.r + 6) return false;
+  }
+  const segs = toSegments(path);
+  for (const line of game.lines || []) {
+    const prev = toSegments(line.points || []);
+    for (const s1 of segs) for (const s2 of prev) if (segmentsIntersect(s1.a, s1.b, s2.a, s2.b)) return false;
+  }
+  return true;
+}
 
 function updateTopTray() {
   const game = state.game;
-  connPillEl.innerHTML = `<strong>Server:</strong> ${state.connected ? 'Connected' : 'Offline'}`;
+  connPillEl.innerHTML = `<strong>Firebase:</strong> ${state.connected ? 'Connected' : 'Offline'}`;
   turnPillEl.innerHTML = `<strong>Turn:</strong> ${label(game.caller)} calls → ${label(game.drawer)} draws`;
   const targetLabel = game.selectedTarget == null ? 'None' : (game.selectedTarget === 'H' ? 'Cat House' : game.selectedTarget);
   selectedPillEl.innerHTML = `<strong>Selected:</strong> ${targetLabel}`;
   rolePillEl.innerHTML = `<strong>You:</strong> ${state.yourRole ? label(state.yourRole) : '-'}`;
   roomLabel.textContent = state.roomCode ? `Room ${state.roomCode} • ${state.players.p1 ? 'P1✅' : 'P1❌'} ${state.players.p2 ? 'P2✅' : 'P2❌'}` : 'No room yet.';
-  setStatus(game.status);
+  setStatus(game.status || '');
 }
 
 function pointerPos(e) {
@@ -116,10 +177,226 @@ function pointerPos(e) {
   const t = e.touches ? e.touches[0] : e;
   return { x: (t.clientX - rect.left) * (canvas.width / rect.width), y: (t.clientY - rect.top) * (canvas.height / rect.height) };
 }
-
 function hitNode(pos) {
   for (const p of POINTS) if (!state.game.visited.includes(p.id) && dist(pos, p) <= p.r + 12) return p;
   return null;
+}
+
+function drawPath(points, color, width = 3) {
+  if (points.length < 2) return;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+  ctx.stroke();
+}
+function drawNode(p, active = false) {
+  ctx.fillStyle = '#fff';
+  ctx.strokeStyle = active ? '#f97316' : '#0f172a';
+  ctx.lineWidth = active ? 3 : 2;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#0f172a';
+  ctx.font = 'bold 14px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(String(p.id), p.x, p.y + 0.5);
+}
+function draw() {
+  const game = state.game;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (const line of game.lines || []) drawPath(line.points, line.drawer === 'p1' ? '#2563eb' : '#16a34a', 3);
+  if (state.drawing) drawPath(state.drawing, '#dc2626', 2);
+
+  ctx.fillStyle = '#fde68a';
+  ctx.strokeStyle = game.selectedTarget === 'H' ? '#f97316' : '#7c2d12';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(HOUSE.x, HOUSE.y, HOUSE.r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#7c2d12';
+  ctx.font = 'bold 12px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('CAT', HOUSE.x, HOUSE.y - 4);
+  ctx.fillText('HOUSE', HOUSE.x, HOUSE.y + 9);
+
+  POINTS.forEach((p) => drawNode(p, game.selectedTarget === p.id));
+  updateTopTray();
+}
+
+function determineRole(players) {
+  if (!players) return null;
+  if (players.p1 === deviceId) return 'p1';
+  if (players.p2 === deviceId) return 'p2';
+  return null;
+}
+
+function roomRef(code) { return doc(db, ROOM_COLLECTION, code); }
+function randomCode() { return Math.random().toString(36).slice(2, 7).toUpperCase(); }
+
+async function createRoom() {
+  let code = randomCode();
+  for (let i = 0; i < 5; i++) {
+    const ref = roomRef(code);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) {
+      await setDoc(ref, {
+        players: { p1: deviceId, p2: null },
+        game: initialGame(true),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      return joinRoomByCode(code);
+    }
+    code = randomCode();
+  }
+  setStatus('Could not create room. Try again.');
+}
+
+async function joinRoomByCode(codeInput) {
+  const code = String(codeInput || '').trim().toUpperCase();
+  if (!code) return;
+  const ref = roomRef(code);
+  try {
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) throw new Error('Room code not found.');
+      const data = snap.data();
+      const players = data.players || {};
+      let next = { ...players };
+
+      if (players.p1 !== deviceId && players.p2 !== deviceId) {
+        if (!players.p1) next.p1 = deviceId;
+        else if (!players.p2) next.p2 = deviceId;
+        else throw new Error('Room already has 2 players.');
+      }
+      const bothReady = Boolean(next.p1 && next.p2);
+      const nextGame = { ...(data.game || initialGame()), status: bothReady ? 'Player 1: select a number for Player 2 to draw.' : 'Waiting for Player 2 to join room...' };
+      tx.update(ref, { players: next, game: nextGame, updatedAt: serverTimestamp() });
+    });
+  } catch (err) {
+    setStatus(err.message || 'Join failed.');
+    return;
+  }
+
+  if (state.unsub) state.unsub();
+  state.roomCode = code;
+  state.unsub = onSnapshot(ref, (snap) => {
+    state.connected = true;
+    if (!snap.exists()) {
+      setStatus('Room deleted.');
+      return;
+    }
+    const data = snap.data();
+    state.players = { p1: Boolean(data.players?.p1), p2: Boolean(data.players?.p2) };
+    state.yourRole = determineRole(data.players);
+    state.game = data.game || initialGame();
+    state.drawing = null;
+    draw();
+  }, () => {
+    state.connected = false;
+    updateTopTray();
+    setStatus('Firebase connection issue. Retry.');
+  });
+}
+
+async function submitSelection(targetId) {
+  if (!state.roomCode) return;
+  const ref = roomRef(state.roomCode);
+  try {
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) throw new Error('Room not found.');
+      const data = snap.data();
+      const game = { ...(data.game || initialGame()) };
+      if (game.gameOver || game.selectedTarget != null) return;
+      if (determineRole(data.players) !== game.caller) return;
+      if ((game.visited || []).includes(targetId)) return;
+      game.selectedTarget = targetId;
+      game.status = `${label(game.caller)} selected ${targetId}. ${label(game.drawer)} draw from ${game.currentId} to ${targetId}.`;
+      tx.update(ref, { game, updatedAt: serverTimestamp() });
+    });
+  } catch (err) {
+    setStatus(err.message || 'Select failed.');
+  }
+}
+
+async function submitPath(rawPath) {
+  if (!state.roomCode) return;
+  const ref = roomRef(state.roomCode);
+  try {
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) throw new Error('Room not found.');
+      const data = snap.data();
+      const game = { ...(data.game || initialGame()) };
+      if (game.gameOver || game.selectedTarget == null) return;
+      if (determineRole(data.players) !== game.drawer) return;
+
+      const from = pointById(game.currentId);
+      const target = pointById(game.selectedTarget);
+      const path = Array.isArray(rawPath) ? rawPath.map((p) => ({ x: Number(p.x), y: Number(p.y) })) : [];
+      if (path.length < 2) {
+        game.status = `Too short. Retry same turn: ${label(game.drawer)} draw again.`;
+        tx.update(ref, { game, updatedAt: serverTimestamp() });
+        return;
+      }
+      if (dist(path[0], from) > 1) path.unshift({ x: from.x, y: from.y });
+      const end = path[path.length - 1];
+      if (dist(end, target) > target.r + 16) {
+        game.status = `Path must end on ${game.selectedTarget === 'H' ? 'Cat House' : `number ${game.selectedTarget}`}. Retry same turn.`;
+        tx.update(ref, { game, updatedAt: serverTimestamp() });
+        return;
+      }
+
+      const prev = path[path.length - 2] || path[0];
+      path.push(pointOnCircle(target, prev, target.r));
+      if (!isValidPath(game, path, game.currentId, game.selectedTarget)) {
+        game.status = 'Line crossed/touched blocked area. Retry same turn.';
+        tx.update(ref, { game, updatedAt: serverTimestamp() });
+        return;
+      }
+
+      const lines = [...(game.lines || [])];
+      const visited = [...(game.visited || [])];
+      lines.push({ fromId: game.currentId, toId: game.selectedTarget, drawer: game.drawer, points: path });
+      if (game.selectedTarget !== 'H') visited.push(game.selectedTarget);
+      game.lines = lines;
+      game.visited = visited;
+      game.currentId = game.selectedTarget;
+
+      if (game.selectedTarget === 'H' && visited.length === POINTS.length) {
+        game.gameOver = true;
+        game.status = `${label(game.drawer)} wins by connecting back to Cat House!`;
+        tx.update(ref, { game, updatedAt: serverTimestamp() });
+        return;
+      }
+
+      game.selectedTarget = null;
+      [game.caller, game.drawer] = [game.drawer, game.caller];
+      if (visited.length === POINTS.length) {
+        game.selectedTarget = 'H';
+        game.status = `${label(game.caller)} selected Cat House. ${label(game.drawer)} draw from ${game.currentId} back to Cat House.`;
+      } else {
+        game.status = `${label(game.caller)}: select a number for ${label(game.drawer)}.`;
+      }
+      tx.update(ref, { game, updatedAt: serverTimestamp() });
+    });
+  } catch (err) {
+    setStatus(err.message || 'Draw submit failed.');
+  }
+}
+
+async function restartRoom() {
+  if (!state.roomCode) return;
+  const ref = roomRef(state.roomCode);
+  await updateDoc(ref, { game: initialGame(!(state.players.p1 && state.players.p2)), updatedAt: serverTimestamp() });
 }
 
 function boardClick(e) {
@@ -127,7 +404,7 @@ function boardClick(e) {
   const game = state.game;
   if (game.gameOver || game.selectedTarget != null || state.yourRole !== game.caller) return;
   const node = hitNode(pointerPos(e));
-  if (node) ws.send(JSON.stringify({ type: 'select_target', targetId: node.id }));
+  if (node) submitSelection(node.id);
 }
 
 function startDraw(e) {
@@ -159,111 +436,29 @@ function finalizeDraw() {
   const end = state.drawing.at(-1);
   const path = [...state.drawing];
   state.drawing = null;
-
   if (dist(end, target) > target.r + 16) {
     setStatus(`Path must end on ${game.selectedTarget === 'H' ? 'Cat House' : `number ${game.selectedTarget}`}. Retry same turn.`);
     return draw();
   }
-
   const prev = path[path.length - 2] || path[0];
   path.push(pointOnCircle(target, prev, target.r));
-  ws.send(JSON.stringify({ type: 'submit_path', path }));
+  submitPath(path);
 }
 
-function drawPath(points, color, width = 3) {
-  if (points.length < 2) return;
-  ctx.strokeStyle = color;
-  ctx.lineWidth = width;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  ctx.beginPath();
-  ctx.moveTo(points[0].x, points[0].y);
-  for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
-  ctx.stroke();
-}
-
-function drawNode(p, active = false) {
-  ctx.fillStyle = '#fff';
-  ctx.strokeStyle = active ? '#f97316' : '#0f172a';
-  ctx.lineWidth = active ? 3 : 2;
-  ctx.beginPath();
-  ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = '#0f172a';
-  ctx.font = 'bold 14px Arial';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(String(p.id), p.x, p.y + 0.5);
-}
-
-function draw() {
-  const game = state.game;
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  for (const line of game.lines) drawPath(line.points, line.drawer === 'p1' ? '#2563eb' : '#16a34a', 3);
-  if (state.drawing) drawPath(state.drawing, '#dc2626', 2);
-
-  ctx.fillStyle = '#fde68a';
-  ctx.strokeStyle = game.selectedTarget === 'H' ? '#f97316' : '#7c2d12';
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.arc(HOUSE.x, HOUSE.y, HOUSE.r, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = '#7c2d12';
-  ctx.font = 'bold 12px Arial';
-  ctx.textAlign = 'center';
-  ctx.fillText('CAT', HOUSE.x, HOUSE.y - 4);
-  ctx.fillText('HOUSE', HOUSE.x, HOUSE.y + 9);
-
-  POINTS.forEach(p => drawNode(p, game.selectedTarget === p.id));
-  updateTopTray();
-}
-
-ws.addEventListener('open', () => {
-  state.connected = true;
-  createRoomBtn.disabled = false;
-  joinRoomBtn.disabled = false;
-  setStatus('Connected. Create room or join with room code.');
-  updateTopTray();
-});
-
-ws.addEventListener('message', (event) => {
-  const msg = JSON.parse(event.data);
-  if (msg.type === 'error') return setStatus(msg.message);
-  if (msg.type === 'state') {
-    state.roomCode = msg.roomCode;
-    state.yourRole = msg.yourRole;
-    state.players = msg.players;
-    state.game = msg.game;
-    state.drawing = null;
-    draw();
-  }
-});
-
-ws.addEventListener('close', () => {
-  state.connected = false;
-  createRoomBtn.disabled = true;
-  joinRoomBtn.disabled = true;
-  setStatus('Disconnected from server. Refresh page.');
-  updateTopTray();
-});
-
-createRoomBtn.addEventListener('click', () => ws.send(JSON.stringify({ type: 'create_room' })));
-joinRoomBtn.addEventListener('click', () => ws.send(JSON.stringify({ type: 'join_room', roomCode: roomCodeInput.value.trim().toUpperCase() })));
-restartBtn.addEventListener('click', () => ws.send(JSON.stringify({ type: 'restart' })));
+createRoomBtn.addEventListener('click', createRoom);
+joinRoomBtn.addEventListener('click', () => joinRoomByCode(roomCodeInput.value));
+restartBtn.addEventListener('click', restartRoom);
 
 canvas.addEventListener('click', boardClick);
 canvas.addEventListener('mousedown', startDraw);
 canvas.addEventListener('mousemove', moveDraw);
 canvas.addEventListener('mouseup', finalizeDraw);
 canvas.addEventListener('mouseleave', finalizeDraw);
-canvas.addEventListener('touchstart', e => { startDraw(e); e.preventDefault(); }, { passive: false });
-canvas.addEventListener('touchmove', e => { moveDraw(e); e.preventDefault(); }, { passive: false });
-canvas.addEventListener('touchend', e => { finalizeDraw(e); e.preventDefault(); }, { passive: false });
+canvas.addEventListener('touchstart', (e) => { startDraw(e); e.preventDefault(); }, { passive: false });
+canvas.addEventListener('touchmove', (e) => { moveDraw(e); e.preventDefault(); }, { passive: false });
+canvas.addEventListener('touchend', (e) => { finalizeDraw(e); e.preventDefault(); }, { passive: false });
 
-createRoomBtn.disabled = true;
-joinRoomBtn.disabled = true;
+setStatus('Ready. Create room or join with code.');
 draw();
 </script>
 </body>
