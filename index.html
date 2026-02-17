@@ -81,6 +81,19 @@
     h3 { font-family: 'Fredoka', cursive; color: #9a3412; font-size: 26px; letter-spacing: .3px; }
     .floating { animation: glowPulse 2.8s ease-in-out infinite; }
     @keyframes glowPulse { 0%,100% { box-shadow: 0 10px 28px rgba(233, 108, 65, .14);} 50% { box-shadow: 0 14px 30px rgba(20, 184, 166, .18);} }
+    .caller-pad { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 6px; }
+    .call-num-btn {
+      border: 1px solid #fcb98b;
+      background: #fff7ed;
+      color: #9a3412;
+      border-radius: 10px;
+      min-height: 34px;
+      font-family: 'Fredoka', cursive;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    .call-num-btn:disabled { opacity: .45; cursor: not-allowed; }
+
     canvas {
       width: 100%;
       height: auto;
@@ -125,6 +138,7 @@
     <div class="panel">
       <canvas id="board" width="700" height="1560"></canvas>
       <div id="status" class="status"></div>
+      <div id="callerPad" class="caller-pad"></div>
     </div>
   </div>
 </div>
@@ -166,6 +180,7 @@ const connPillEl = document.getElementById('connPill');
 const createRoomBtn = document.getElementById('createRoom');
 const joinRoomBtn = document.getElementById('joinRoom');
 const roomCodeInput = document.getElementById('roomCodeInput');
+const callerPadEl = document.getElementById('callerPad');
 
 if (window.__catsCradleFileMode) {
   const msg = 'Opened with file://. Start local server: python3 -m http.server 4173 then open http://localhost:4173';
@@ -312,6 +327,21 @@ function isValidPath(game, path, fromId, toId) {
   return true;
 }
 
+function renderCallerPad() {
+  const game = state.game;
+  const isCallerTurn = state.yourRole === game.caller && game.selectedTarget == null && !game.gameOver;
+  if (!state.roomCode || !isCallerTurn) {
+    callerPadEl.innerHTML = '';
+    callerPadEl.classList.add('hidden');
+    return;
+  }
+
+  callerPadEl.classList.remove('hidden');
+  const visited = new Set(game.visited || []);
+  const nums = POINTS.map((point) => point.id);
+  callerPadEl.innerHTML = nums.map((n) => `<button class="call-num-btn" data-num="${n}" ${visited.has(n) ? 'disabled' : ''}>${n}</button>`).join('');
+}
+
 function updateTopTray() {
   const game = state.game;
   connPillEl.innerHTML = `<strong>Realtime DB:</strong> ${state.connected ? 'Connected' : 'Offline'}`;
@@ -369,6 +399,7 @@ function draw() {
 
   POINTS.forEach((point) => drawNode(point, game.selectedTarget === point.id));
   updateTopTray();
+  renderCallerPad();
 }
 
 async function createRoom() {
@@ -510,17 +541,19 @@ async function joinRoomByCode(rawCode) {
 async function submitSelection(targetId) {
   if (!state.roomCode) return;
   try {
-    setStatus(`Selecting ${targetId}...`);
-    await runTransaction(roomPath(state.roomCode), (current) => {
-      if (!current) return current;
-      const game = current.game || initialGame();
-      if (game.gameOver || game.selectedTarget != null) return current;
-      if ((game.visited || []).includes(targetId)) return current;
+    const snap = await get(roomPath(state.roomCode));
+    if (!snap.exists()) {
+      setStatus('Room not found.');
+      return;
+    }
+    const current = snap.val();
+    const game = current.game || initialGame();
+    if (game.gameOver || game.selectedTarget != null) return;
+    if ((game.visited || []).includes(targetId)) return;
 
-      game.selectedTarget = targetId;
-      game.status = `${label(game.caller)} selected ${targetId}. ${label(game.drawer)} draw from ${game.currentId} to ${targetId}.`;
-      return { ...current, game, updatedAt: Date.now() };
-    });
+    game.selectedTarget = targetId;
+    game.status = `${label(game.caller)} selected ${targetId}. ${label(game.drawer)} draw from ${game.currentId} to ${targetId}.`;
+    await update(roomPath(state.roomCode), { game, updatedAt: Date.now() });
   } catch (err) {
     logError('submitSelection failed', err);
     setStatus(friendlyError(err, 'Could not select target.'));
@@ -530,7 +563,6 @@ async function submitSelection(targetId) {
 async function submitPath(rawPath) {
   if (!state.roomCode) return;
   try {
-    setStatus(`Selecting ${targetId}...`);
     await runTransaction(roomPath(state.roomCode), (current) => {
       if (!current) return current;
       const game = current.game || initialGame();
@@ -746,6 +778,11 @@ roomCodeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') joinRo
 restartBtn.addEventListener('click', restartRoom);
 copyCodeBtn.addEventListener('click', copyRoomCode);
 leaveRoomBtn.addEventListener('click', leaveRoom);
+callerPadEl.addEventListener('click', (e) => {
+  const btn = e.target.closest('.call-num-btn');
+  if (!btn || btn.disabled) return;
+  submitSelection(Number(btn.dataset.num));
+});
 
 canvas.addEventListener('click', boardClick);
 canvas.addEventListener('pointerdown', (e) => { handlePointerDown(e); });
