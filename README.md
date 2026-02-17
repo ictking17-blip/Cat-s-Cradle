@@ -10,19 +10,13 @@ python3 -m http.server 4173
 
 Open `http://localhost:4173`.
 
-## Current gameplay
+## How to play
 
-- 12 numbered nodes + Cat House at top.
 - Two human players share one screen.
-- Roles alternate every successful move:
-  - Player 1 calls a number, Player 2 draws.
-  - Then Player 2 calls, Player 1 draws.
-- A draw is invalid if it:
-  - crosses any previous line,
-  - touches any non-target numbered node,
-  - leaves the board,
-  - or does not finish on the selected target.
-- Winning:
-  - after all numbers are used, the next caller forces the return to Cat House,
-  - the drawer who successfully connects back to Cat House wins,
-  - invalid draw loses immediately.
+- Caller selects target by clicking the number node on the board.
+- Drawer draws from current node to selected target.
+- Roles alternate each valid move:
+  - Player 1 calls → Player 2 draws
+  - Player 2 calls → Player 1 draws
+- Invalid draw (crossing lines, touching blocked nodes, out of bounds) does **not** end game; same drawer retries the same turn.
+- After all numbers are connected, final forced target is Cat House; successful return wins.

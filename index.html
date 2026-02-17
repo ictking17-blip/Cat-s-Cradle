@@ -9,20 +9,60 @@
     body {
       margin: 0;
       font-family: Inter, Arial, sans-serif;
-      background: #f5f7fb;
+      background: linear-gradient(180deg, #f0f4ff 0%, #f7fbff 100%);
       color: #14213d;
       display: flex;
       justify-content: center;
-      padding: 20px;
+      padding: 18px;
     }
-    .app { width: min(980px, 100%); }
-    h1 { margin: 0 0 8px; }
-    .panel { display: grid; gap: 12px; grid-template-columns: 2fr 1fr; }
+    .app { width: min(920px, 100%); }
+    .top-tray {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 14px;
+      padding: 12px 14px;
+      box-shadow: 0 10px 24px rgba(15, 23, 42, .2);
+      margin-bottom: 12px;
+    }
+    .pill-wrap { display: flex; gap: 10px; flex-wrap: wrap; }
+    .pill {
+      background: rgba(148, 163, 184, .22);
+      border: 1px solid rgba(148, 163, 184, .35);
+      color: #f8fafc;
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .2px;
+    }
+    .pill strong { color: #93c5fd; }
+    .restart {
+      border: 0;
+      border-radius: 10px;
+      background: #22c55e;
+      color: #052e16;
+      font-weight: 800;
+      padding: 10px 12px;
+      cursor: pointer;
+    }
     .board-wrap {
       background: #fff;
       border-radius: 14px;
       box-shadow: 0 6px 20px rgba(0,0,0,.08);
       padding: 10px;
+    }
+    .status {
+      margin: 10px 0 0;
+      font-size: 14px;
+      line-height: 1.35;
+      background: #e8f0ff;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid #cfe0ff;
     }
     canvas {
       width: 100%;
@@ -32,94 +72,46 @@
       background: #ffffff;
       border: 1px solid #e6ebf5;
     }
-    .controls {
-      background: #fff;
-      border-radius: 14px;
-      box-shadow: 0 6px 20px rgba(0,0,0,.08);
-      padding: 14px;
-      align-self: start;
-    }
-    .numbers { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin: 10px 0; }
-    button {
-      border: none;
-      border-radius: 10px;
-      padding: 10px;
-      font-weight: 600;
-      background: #2563eb;
-      color: #fff;
-      cursor: pointer;
-    }
-    button[disabled] { opacity: .4; cursor: not-allowed; }
-    .small { background: #0ea5a6; margin-top: 8px; width: 100%; }
-    .status {
-      font-size: 14px;
-      line-height: 1.35;
-      background: #f0f5ff;
-      padding: 10px;
-      border-radius: 8px;
-      min-height: 56px;
-      margin-bottom: 8px;
-    }
-    .turn-chip {
-      display: inline-block;
-      margin: 4px 0 10px;
-      padding: 6px 10px;
-      border-radius: 999px;
-      background: #e0ecff;
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: .2px;
-    }
-    .legend { font-size: 13px; color: #4b5563; }
-    ul { margin-top: 6px; padding-left: 18px; }
-    @media (max-width: 850px) { .panel { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
 <div class="app">
-  <h1>Cat House Strategy Game (2 Player Local)</h1>
-  <p class="legend">Caller chooses a number. Drawer must connect from current point to selected target without crossing lines or touching other nodes.</p>
-  <div class="panel">
-    <div class="board-wrap"><canvas id="board" width="700" height="900"></canvas></div>
-    <div class="controls">
-      <div><strong>Available numbers</strong></div>
-      <div id="numbers" class="numbers"></div>
-      <button id="restart" class="small">Restart</button>
-      <h3>Turn</h3>
-      <div id="turnChip" class="turn-chip"></div>
-      <div id="status" class="status"></div>
-      <div><strong>How turns work</strong></div>
-      <ul>
-        <li>Player 1 calls, Player 2 draws.</li>
-        <li>Then Player 2 calls, Player 1 draws.</li>
-        <li>Repeat until all numbers are used.</li>
-        <li>Final move: connect the last point back to Cat House.</li>
-      </ul>
+  <div class="top-tray">
+    <div class="pill-wrap">
+      <div class="pill" id="turnPill"></div>
+      <div class="pill" id="selectedPill"></div>
     </div>
+    <button id="restart" class="restart">Restart</button>
+  </div>
+
+  <div class="board-wrap">
+    <canvas id="board" width="700" height="900"></canvas>
+    <div id="status" class="status"></div>
   </div>
 </div>
+
 <script>
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
 const statusEl = document.getElementById('status');
-const numbersEl = document.getElementById('numbers');
 const restartBtn = document.getElementById('restart');
-const turnChipEl = document.getElementById('turnChip');
+const turnPillEl = document.getElementById('turnPill');
+const selectedPillEl = document.getElementById('selectedPill');
 
-const HOUSE = { id: 'H', x: 350, y: 80, r: 26 };
+const HOUSE = { id: 'H', x: 350, y: 80, r: 24 };
 const POINTS = [
   {id:1,x:150,y:210},{id:2,x:330,y:210},{id:3,x:520,y:210},
   {id:4,x:120,y:360},{id:5,x:300,y:360},{id:6,x:510,y:360},
   {id:7,x:130,y:510},{id:8,x:320,y:510},{id:9,x:520,y:510},
   {id:10,x:140,y:680},{id:11,x:350,y:680},{id:12,x:540,y:680}
-].map(p => ({...p, r: 22}));
+].map(p => ({...p, r: 15}));
 
 let state;
 
 function init() {
   state = {
     visited: new Set(),
-    lines: [], // {fromId,toId,drawer,points}
+    lines: [],
     currentId: 'H',
     caller: 'p1',
     drawer: 'p2',
@@ -127,9 +119,8 @@ function init() {
     gameOver: false,
     drawing: null,
   };
-  buildNumberButtons();
-  updateTurnChip();
-  setStatus('Player 1: choose the first number for Player 2 to draw from Cat House.');
+  updateTopTray();
+  setStatus('Player 1: click a number on the board for Player 2 to draw.');
   draw();
 }
 
@@ -144,34 +135,23 @@ function pointById(id) {
 
 function setStatus(msg){ statusEl.textContent = msg; }
 
-function updateTurnChip(){
-  turnChipEl.textContent = `${label(state.caller)} calls → ${label(state.drawer)} draws`;
-}
-
-function buildNumberButtons(){
-  numbersEl.innerHTML = '';
-  const remaining = POINTS.filter(p => !state.visited.has(p.id));
-  remaining.forEach(p => {
-    const b = document.createElement('button');
-    b.textContent = p.id;
-    b.disabled = !!state.selectedTarget || state.gameOver;
-    b.addEventListener('click', () => chooseTarget(p.id));
-    numbersEl.appendChild(b);
-  });
+function updateTopTray(){
+  turnPillEl.innerHTML = `<strong>Turn:</strong> ${label(state.caller)} calls → ${label(state.drawer)} draws`;
+  const targetLabel = state.selectedTarget == null ? 'None' : (state.selectedTarget === 'H' ? 'Cat House' : state.selectedTarget);
+  selectedPillEl.innerHTML = `<strong>Selected:</strong> ${targetLabel}`;
 }
 
 function chooseTarget(id){
   if (state.gameOver || state.selectedTarget || state.visited.has(id)) return;
   state.selectedTarget = id;
-  buildNumberButtons();
-  updateTurnChip();
-  setStatus(`${label(state.caller)} called ${id}. ${label(state.drawer)} now draw from ${state.currentId} to ${id}.`);
+  updateTopTray();
+  setStatus(`${label(state.caller)} selected ${id}. ${label(state.drawer)} draw from ${state.currentId} to ${id}.`);
   draw();
 }
 
 function switchRoles(){
   [state.caller, state.drawer] = [state.drawer, state.caller];
-  updateTurnChip();
+  updateTopTray();
 }
 
 function afterSuccessfulDraw(targetId, points){
@@ -181,8 +161,8 @@ function afterSuccessfulDraw(targetId, points){
 
   if (targetId === 'H' && state.visited.size === POINTS.length) {
     state.gameOver = true;
-    setStatus(`${label(state.drawer)} wins by returning to Cat House on the final move!`);
-    buildNumberButtons();
+    updateTopTray();
+    setStatus(`${label(state.drawer)} wins by connecting back to Cat House!`);
     draw();
     return;
   }
@@ -191,25 +171,32 @@ function afterSuccessfulDraw(targetId, points){
   switchRoles();
 
   if (state.visited.size === POINTS.length) {
-    setStatus(`${label(state.caller)}: no numbers left. Call Cat House return. ${label(state.drawer)} must draw from ${state.currentId} back to Cat House.`);
     state.selectedTarget = 'H';
+    updateTopTray();
+    setStatus(`${label(state.caller)} selected Cat House. ${label(state.drawer)} draw from ${state.currentId} back to Cat House.`);
   } else {
-    setStatus(`${label(state.caller)}: choose a number for ${label(state.drawer)} to draw.`);
+    setStatus(`${label(state.caller)}: click next number on board for ${label(state.drawer)}.`);
   }
 
-  buildNumberButtons();
   draw();
 }
 
-function loseInvalidDraw(){
-  state.gameOver = true;
-  const winner = state.drawer === 'p1' ? 'p2' : 'p1';
-  setStatus(`${label(state.drawer)} made an invalid path. ${label(winner)} wins.`);
-  buildNumberButtons();
+function invalidRetry(reason){
+  setStatus(`${reason} Retry same turn: ${label(state.drawer)} draw again to ${state.selectedTarget === 'H' ? 'Cat House' : state.selectedTarget}.`);
   draw();
 }
 
 function dist(a,b){ return Math.hypot(a.x-b.x,a.y-b.y); }
+
+function pointOnCircle(center, approachPoint, radius){
+  const dx = center.x - approachPoint.x;
+  const dy = center.y - approachPoint.y;
+  const len = Math.hypot(dx, dy) || 1;
+  return {
+    x: center.x - (dx / len) * radius,
+    y: center.y - (dy / len) * radius
+  };
+}
 
 function isValidPath(path, fromId, toId){
   for (const p of path) {
@@ -219,9 +206,9 @@ function isValidPath(path, fromId, toId){
   const blocked = POINTS.filter(p => p.id !== fromId && p.id !== toId);
   for (const p of path) {
     for (const n of blocked) {
-      if (dist(p,n) < n.r + 6) return false;
+      if (dist(p,n) < n.r + 5) return false;
     }
-    if (fromId !== 'H' && toId !== 'H' && dist(p,HOUSE) < HOUSE.r + 8) return false;
+    if (fromId !== 'H' && toId !== 'H' && dist(p,HOUSE) < HOUSE.r + 6) return false;
   }
 
   const segs = toSegments(path);
@@ -257,6 +244,20 @@ function pointerPos(e){
   };
 }
 
+function hitNode(pos){
+  for (const p of POINTS) {
+    if (!state.visited.has(p.id) && dist(pos, p) <= p.r + 12) return p;
+  }
+  return null;
+}
+
+function boardClick(e){
+  if (state.gameOver || state.selectedTarget) return;
+  const pos = pointerPos(e);
+  const node = hitNode(pos);
+  if (node) chooseTarget(node.id);
+}
+
 function startDraw(e){
   if (state.gameOver || !state.selectedTarget) return;
   const from = pointById(state.currentId);
@@ -281,20 +282,23 @@ function endDraw(){
   state.drawing = null;
 
   if (dist(end, target) > target.r + 16) {
-    setStatus(`Path must end on ${state.selectedTarget === 'H' ? 'Cat House' : `number ${state.selectedTarget}`}. Draw again.`);
-    draw();
+    invalidRetry(`Path must end on ${state.selectedTarget === 'H' ? 'Cat House' : `number ${state.selectedTarget}`}.`);
     return;
   }
 
-  path.push({x:target.x, y:target.y});
+  const prev = path[path.length - 2] || path[0];
+  const endOnCircle = pointOnCircle(target, prev, target.r);
+  path.push(endOnCircle);
+
   if (!isValidPath(path, state.currentId, state.selectedTarget)) {
-    loseInvalidDraw();
+    invalidRetry('Line crossed/touched blocked area.');
     return;
   }
+
   afterSuccessfulDraw(state.selectedTarget, path);
 }
 
-function drawPath(points,color,width=4){
+function drawPath(points,color,width=3){
   if(points.length<2) return;
   ctx.strokeStyle = color;
   ctx.lineWidth = width;
@@ -307,49 +311,45 @@ function drawPath(points,color,width=4){
 }
 
 function drawNode(p, active=false){
-  ctx.fillStyle = active ? '#f97316' : '#fff';
-  ctx.strokeStyle = '#0f172a';
-  ctx.lineWidth = 3;
+  ctx.fillStyle = '#fff';
+  ctx.strokeStyle = active ? '#f97316' : '#0f172a';
+  ctx.lineWidth = active ? 3 : 2;
   ctx.beginPath();
   ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
   ctx.fill();
   ctx.stroke();
   ctx.fillStyle = '#0f172a';
-  ctx.font = 'bold 20px Arial';
+  ctx.font = 'bold 14px Arial';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(String(p.id), p.x, p.y + 1);
+  ctx.fillText(String(p.id), p.x, p.y + 0.5);
 }
 
 function draw(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
   for(const line of state.lines){
-    drawPath(line.points, line.drawer === 'p1' ? '#1d4ed8' : '#16a34a', 5);
+    drawPath(line.points, line.drawer === 'p1' ? '#2563eb' : '#16a34a', 3);
   }
-  if(state.drawing) drawPath(state.drawing, '#dc2626', 3);
+  if(state.drawing) drawPath(state.drawing, '#dc2626', 2);
 
   ctx.fillStyle = '#fde68a';
-  ctx.strokeStyle = '#7c2d12';
+  ctx.strokeStyle = state.selectedTarget === 'H' ? '#f97316' : '#7c2d12';
   ctx.lineWidth = 3;
   ctx.beginPath();
   ctx.arc(HOUSE.x,HOUSE.y,HOUSE.r,0,Math.PI*2);
   ctx.fill();
   ctx.stroke();
   ctx.fillStyle = '#7c2d12';
-  ctx.font = 'bold 13px Arial';
+  ctx.font = 'bold 12px Arial';
   ctx.textAlign = 'center';
   ctx.fillText('CAT', HOUSE.x, HOUSE.y-4);
-  ctx.fillText('HOUSE', HOUSE.x, HOUSE.y+10);
+  ctx.fillText('HOUSE', HOUSE.x, HOUSE.y+9);
 
   POINTS.forEach(p => drawNode(p, state.selectedTarget === p.id));
-
-  ctx.fillStyle = '#111827';
-  ctx.font = 'bold 16px Arial';
-  ctx.fillText('P1', 70, 40);
-  ctx.fillText('P2', 620, 860);
 }
 
+canvas.addEventListener('click', boardClick);
 canvas.addEventListener('mousedown', startDraw);
 canvas.addEventListener('mousemove', moveDraw);
 canvas.addEventListener('mouseup', endDraw);
