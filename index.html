@@ -3,105 +3,48 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cat's Cradle Duel</title>
+  <title>Cat's Cradle Duel Online</title>
   <style>
     :root { color-scheme: light; }
-    body {
-      margin: 0;
-      font-family: Inter, Arial, sans-serif;
-      background: linear-gradient(180deg, #f0f4ff 0%, #f7fbff 100%);
-      color: #14213d;
-      display: flex;
-      justify-content: center;
-      min-height: 100dvh;
-      padding: calc(10px + env(safe-area-inset-top)) 10px calc(10px + env(safe-area-inset-bottom));
-      box-sizing: border-box;
-    }
-    .app {
-      width: min(560px, 100%);
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      min-height: 0;
-    }
-    .top-tray {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 10px;
-      align-items: center;
-      background: #0f172a;
-      color: #e2e8f0;
-      border-radius: 14px;
-      padding: 12px 14px;
-      box-shadow: 0 10px 24px rgba(15, 23, 42, .2);
-    }
-    .pill-wrap { display: flex; gap: 10px; flex-wrap: wrap; }
-    .pill {
-      background: rgba(148, 163, 184, .22);
-      border: 1px solid rgba(148, 163, 184, .35);
-      color: #f8fafc;
-      border-radius: 999px;
-      padding: 6px 10px;
-      font-size: 13px;
-      font-weight: 700;
-      letter-spacing: .2px;
-    }
-    .pill strong { color: #93c5fd; }
-    .restart {
-      border: 0;
-      border-radius: 10px;
-      background: #22c55e;
-      color: #052e16;
-      font-weight: 800;
-      padding: 10px 12px;
-      cursor: pointer;
-    }
-    .board-wrap {
-      background: #fff;
-      border-radius: 14px;
-      box-shadow: 0 6px 20px rgba(0,0,0,.08);
-      padding: 10px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    .status {
-      margin: 0;
-      font-size: 13px;
-      line-height: 1.35;
-      background: #e8f0ff;
-      padding: 10px;
-      border-radius: 10px;
-      border: 1px solid #cfe0ff;
-    }
-    canvas {
-      width: 100%;
-      height: auto;
-      max-height: calc(100dvh - 175px);
-      touch-action: none;
-      border-radius: 10px;
-      background: #ffffff;
-      border: 1px solid #e6ebf5;
-      aspect-ratio: 9 / 20;
-    }
-
-    @media (max-width: 420px) {
-      .pill { font-size: 12px; padding: 5px 8px; }
-      .restart { padding: 9px 10px; font-size: 13px; }
-    }
+    body { margin:0; font-family:Inter,Arial,sans-serif; background:linear-gradient(180deg,#f0f4ff 0%,#f7fbff 100%); color:#14213d; display:flex; justify-content:center; min-height:100dvh; padding:calc(10px + env(safe-area-inset-top)) 10px calc(10px + env(safe-area-inset-bottom)); box-sizing:border-box; }
+    .app { width:min(560px,100%); display:flex; flex-direction:column; gap:10px; }
+    .top-tray { display:grid; grid-template-columns:1fr auto; gap:10px; align-items:center; background:#0f172a; color:#e2e8f0; border-radius:14px; padding:12px 14px; box-shadow:0 10px 24px rgba(15,23,42,.2); }
+    .pill-wrap { display:flex; gap:10px; flex-wrap:wrap; }
+    .pill { background:rgba(148,163,184,.22); border:1px solid rgba(148,163,184,.35); color:#f8fafc; border-radius:999px; padding:6px 10px; font-size:13px; font-weight:700; }
+    .pill strong { color:#93c5fd; }
+    .restart { border:0; border-radius:10px; background:#22c55e; color:#052e16; font-weight:800; padding:10px 12px; cursor:pointer; }
+    .panel { background:#fff; border-radius:14px; box-shadow:0 6px 20px rgba(0,0,0,.08); padding:10px; display:grid; gap:8px; }
+    .room-controls { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .room-controls button, .room-controls input { border-radius:10px; border:1px solid #cdd8ee; font-size:14px; padding:10px; box-sizing:border-box; }
+    .room-controls button { font-weight:700; background:#eef4ff; }
+    .status { margin:0; font-size:13px; line-height:1.35; background:#e8f0ff; padding:10px; border-radius:10px; border:1px solid #cfe0ff; }
+    canvas { width:100%; height:auto; max-height:calc(100dvh - 290px); touch-action:none; border-radius:10px; background:#fff; border:1px solid #e6ebf5; aspect-ratio:9/20; }
+    .small { font-size:12px; opacity:.8; margin:0; }
   </style>
 </head>
 <body>
 <div class="app">
   <div class="top-tray">
     <div class="pill-wrap">
-      <div class="pill" id="turnPill"></div>
-      <div class="pill" id="selectedPill"></div>
+      <div class="pill" id="turnPill">Turn: -</div>
+      <div class="pill" id="selectedPill">Selected: -</div>
+      <div class="pill" id="rolePill">Role: -</div>
+      <div class="pill" id="connPill">Server: Connecting...</div>
     </div>
     <button id="restart" class="restart">Restart</button>
   </div>
 
-  <div class="board-wrap">
+  <div class="panel">
+    <div class="room-controls">
+      <button id="createRoom">Create Room</button>
+      <input id="roomCodeInput" maxlength="5" placeholder="Room code" />
+      <button id="joinRoom">Join Room</button>
+      <div id="roomLabel" class="status">No room yet.</div>
+    </div>
+    <p class="small"><strong>Online mode active:</strong> Share room code with the second player. Works across internet when deployed.</p>
+  </div>
+
+  <div class="panel">
     <canvas id="board" width="700" height="1560"></canvas>
     <div id="status" class="status"></div>
   </div>
@@ -114,225 +57,137 @@ const statusEl = document.getElementById('status');
 const restartBtn = document.getElementById('restart');
 const turnPillEl = document.getElementById('turnPill');
 const selectedPillEl = document.getElementById('selectedPill');
+const rolePillEl = document.getElementById('rolePill');
+const connPillEl = document.getElementById('connPill');
+const createRoomBtn = document.getElementById('createRoom');
+const joinRoomBtn = document.getElementById('joinRoom');
+const roomCodeInput = document.getElementById('roomCodeInput');
+const roomLabel = document.getElementById('roomLabel');
 
-const HOUSE = { id: 'H', x: 350, y: 135, r: 24 };
-const POINTS = [
-  {id:1,x:150,y:365},{id:2,x:330,y:365},{id:3,x:520,y:365},
-  {id:4,x:120,y:625},{id:5,x:300,y:625},{id:6,x:510,y:625},
-  {id:7,x:130,y:885},{id:8,x:320,y:885},{id:9,x:520,y:885},
-  {id:10,x:140,y:1180},{id:11,x:350,y:1180},{id:12,x:540,y:1180}
-].map(p => ({...p, r: 15}));
-
-let state;
-
-function init() {
-  state = {
-    visited: new Set(),
-    lines: [],
-    currentId: 'H',
-    caller: 'p1',
-    drawer: 'p2',
-    selectedTarget: null,
-    gameOver: false,
-    drawing: null,
-  };
-  updateTopTray();
-  setStatus('Player 1: click a number on the board for Player 2 to draw.');
-  draw();
+const HOUSE = { id: 'H', x: 350, y: 140, r: 24 };
+function createGridPoints() {
+  const columns = 3, rows = 4, left = 140, right = 560, top = 360, bottom = 1140;
+  const xStep = (right - left) / (columns - 1);
+  const yStep = (bottom - top) / (rows - 1);
+  const points = [];
+  let id = 1;
+  for (let row = 0; row < rows; row++) for (let col = 0; col < columns; col++) points.push({ id: id++, x: left + xStep * col, y: top + yStep * row, r: 15 });
+  return points;
 }
+const POINTS = createGridPoints();
 
-function label(playerId) {
-  return playerId === 'p1' ? 'Player 1' : 'Player 2';
-}
+const state = {
+  connected: false,
+  roomCode: null,
+  yourRole: null,
+  players: { p1: false, p2: false },
+  game: { visited: [], lines: [], currentId: 'H', caller: 'p1', drawer: 'p2', selectedTarget: null, gameOver: false, status: 'Connect and create/join a room.' },
+  drawing: null
+};
 
-function pointById(id) {
-  if (id === 'H') return HOUSE;
-  return POINTS.find(p => p.id === id);
-}
+const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+const ws = new WebSocket(`${wsProtocol}//${location.host}`);
 
-function setStatus(msg){ statusEl.textContent = msg; }
-
-function updateTopTray(){
-  turnPillEl.innerHTML = `<strong>Turn:</strong> ${label(state.caller)} calls → ${label(state.drawer)} draws`;
-  const targetLabel = state.selectedTarget == null ? 'None' : (state.selectedTarget === 'H' ? 'Cat House' : state.selectedTarget);
-  selectedPillEl.innerHTML = `<strong>Selected:</strong> ${targetLabel}`;
-}
-
-function chooseTarget(id){
-  if (state.gameOver || state.selectedTarget || state.visited.has(id)) return;
-  state.selectedTarget = id;
-  updateTopTray();
-  setStatus(`${label(state.caller)} selected ${id}. ${label(state.drawer)} draw from ${state.currentId} to ${id}.`);
-  draw();
-}
-
-function switchRoles(){
-  [state.caller, state.drawer] = [state.drawer, state.caller];
-  updateTopTray();
-}
-
-function afterSuccessfulDraw(targetId, points){
-  state.lines.push({fromId: state.currentId, toId: targetId, drawer: state.drawer, points});
-  if (targetId !== 'H') state.visited.add(targetId);
-  state.currentId = targetId;
-
-  if (targetId === 'H' && state.visited.size === POINTS.length) {
-    state.gameOver = true;
-    updateTopTray();
-    setStatus(`${label(state.drawer)} wins by connecting back to Cat House!`);
-    draw();
-    return;
-  }
-
-  state.selectedTarget = null;
-  switchRoles();
-
-  if (state.visited.size === POINTS.length) {
-    state.selectedTarget = 'H';
-    updateTopTray();
-    setStatus(`${label(state.caller)} selected Cat House. ${label(state.drawer)} draw from ${state.currentId} back to Cat House.`);
-  } else {
-    setStatus(`${label(state.caller)}: click next number on board for ${label(state.drawer)}.`);
-  }
-
-  draw();
-}
-
-function invalidRetry(reason){
-  setStatus(`${reason} Retry same turn: ${label(state.drawer)} draw again to ${state.selectedTarget === 'H' ? 'Cat House' : state.selectedTarget}.`);
-  draw();
-}
-
-function dist(a,b){ return Math.hypot(a.x-b.x,a.y-b.y); }
-
-function pointOnCircle(center, approachPoint, radius){
+function label(playerId) { return playerId === 'p1' ? 'Player 1' : 'Player 2'; }
+function pointById(id) { return id === 'H' ? HOUSE : POINTS.find(p => p.id === id); }
+function setStatus(msg) { statusEl.textContent = msg; }
+function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+function pointOnCircle(center, approachPoint, radius) {
   const dx = center.x - approachPoint.x;
   const dy = center.y - approachPoint.y;
   const len = Math.hypot(dx, dy) || 1;
-  return {
-    x: center.x - (dx / len) * radius,
-    y: center.y - (dy / len) * radius
-  };
+  return { x: center.x - (dx / len) * radius, y: center.y - (dy / len) * radius };
+}
+function canPlay() { return state.connected && state.roomCode && state.players.p1 && state.players.p2; }
+
+function updateTopTray() {
+  const game = state.game;
+  connPillEl.innerHTML = `<strong>Server:</strong> ${state.connected ? 'Connected' : 'Offline'}`;
+  turnPillEl.innerHTML = `<strong>Turn:</strong> ${label(game.caller)} calls → ${label(game.drawer)} draws`;
+  const targetLabel = game.selectedTarget == null ? 'None' : (game.selectedTarget === 'H' ? 'Cat House' : game.selectedTarget);
+  selectedPillEl.innerHTML = `<strong>Selected:</strong> ${targetLabel}`;
+  rolePillEl.innerHTML = `<strong>You:</strong> ${state.yourRole ? label(state.yourRole) : '-'}`;
+  roomLabel.textContent = state.roomCode ? `Room ${state.roomCode} • ${state.players.p1 ? 'P1✅' : 'P1❌'} ${state.players.p2 ? 'P2✅' : 'P2❌'}` : 'No room yet.';
+  setStatus(game.status);
 }
 
-function isValidPath(path, fromId, toId){
-  for (const p of path) {
-    if (p.x < 15 || p.y < 15 || p.x > canvas.width - 15 || p.y > canvas.height - 15) return false;
-  }
-
-  const blocked = POINTS.filter(p => p.id !== fromId && p.id !== toId);
-  for (const p of path) {
-    for (const n of blocked) {
-      if (dist(p,n) < n.r + 5) return false;
-    }
-    if (fromId !== 'H' && toId !== 'H' && dist(p,HOUSE) < HOUSE.r + 6) return false;
-  }
-
-  const segs = toSegments(path);
-  for (const line of state.lines) {
-    const prev = toSegments(line.points);
-    for (const s1 of segs) {
-      for (const s2 of prev) {
-        if (segmentsIntersect(s1.a,s1.b,s2.a,s2.b)) return false;
-      }
-    }
-  }
-  return true;
-}
-
-function toSegments(path){
-  const segs=[];
-  for(let i=1;i<path.length;i++) segs.push({a:path[i-1], b:path[i]});
-  return segs;
-}
-
-function ccw(a,b,c){ return (c.y-a.y)*(b.x-a.x) > (b.y-a.y)*(c.x-a.x); }
-function segmentsIntersect(a,b,c,d){
-  if ((a.x===c.x&&a.y===c.y)||(a.x===d.x&&a.y===d.y)||(b.x===c.x&&b.y===c.y)||(b.x===d.x&&b.y===d.y)) return false;
-  return ccw(a,c,d) !== ccw(b,c,d) && ccw(a,b,c) !== ccw(a,b,d);
-}
-
-function pointerPos(e){
+function pointerPos(e) {
   const rect = canvas.getBoundingClientRect();
   const t = e.touches ? e.touches[0] : e;
-  return {
-    x: (t.clientX - rect.left) * (canvas.width / rect.width),
-    y: (t.clientY - rect.top) * (canvas.height / rect.height)
-  };
+  return { x: (t.clientX - rect.left) * (canvas.width / rect.width), y: (t.clientY - rect.top) * (canvas.height / rect.height) };
 }
 
-function hitNode(pos){
-  for (const p of POINTS) {
-    if (!state.visited.has(p.id) && dist(pos, p) <= p.r + 12) return p;
-  }
+function hitNode(pos) {
+  for (const p of POINTS) if (!state.game.visited.includes(p.id) && dist(pos, p) <= p.r + 12) return p;
   return null;
 }
 
-function boardClick(e){
-  if (state.gameOver || state.selectedTarget) return;
-  const pos = pointerPos(e);
-  const node = hitNode(pos);
-  if (node) chooseTarget(node.id);
+function boardClick(e) {
+  if (!canPlay()) return;
+  const game = state.game;
+  if (game.gameOver || game.selectedTarget != null || state.yourRole !== game.caller) return;
+  const node = hitNode(pointerPos(e));
+  if (node) ws.send(JSON.stringify({ type: 'select_target', targetId: node.id }));
 }
 
-function startDraw(e){
-  if (state.gameOver || !state.selectedTarget) return;
-  const from = pointById(state.currentId);
+function startDraw(e) {
+  if (!canPlay()) return;
+  const game = state.game;
+  if (game.gameOver || game.selectedTarget == null || state.yourRole !== game.drawer) return;
+  const from = pointById(game.currentId);
   const pos = pointerPos(e);
   if (dist(pos, from) > from.r + 16) return;
-  state.drawing = [{x:from.x, y:from.y}];
+  state.drawing = [{ x: from.x, y: from.y }];
 }
 
-function moveDraw(e){
+function moveDraw(e) {
   if (!state.drawing) return;
   const pos = pointerPos(e);
   const last = state.drawing.at(-1);
-  if (dist(pos, last) > 3) state.drawing.push(pos);
+  if (dist(pos, last) > 3) {
+    state.drawing.push(pos);
+    const target = pointById(state.game.selectedTarget);
+    if (target && dist(pos, target) <= target.r + 2) return finalizeDraw();
+  }
   draw();
 }
 
-function endDraw(){
+function finalizeDraw() {
   if (!state.drawing) return;
-  const target = pointById(state.selectedTarget);
+  const game = state.game;
+  const target = pointById(game.selectedTarget);
   const end = state.drawing.at(-1);
   const path = [...state.drawing];
   state.drawing = null;
 
   if (dist(end, target) > target.r + 16) {
-    invalidRetry(`Path must end on ${state.selectedTarget === 'H' ? 'Cat House' : `number ${state.selectedTarget}`}.`);
-    return;
+    setStatus(`Path must end on ${game.selectedTarget === 'H' ? 'Cat House' : `number ${game.selectedTarget}`}. Retry same turn.`);
+    return draw();
   }
 
   const prev = path[path.length - 2] || path[0];
-  const endOnCircle = pointOnCircle(target, prev, target.r);
-  path.push(endOnCircle);
-
-  if (!isValidPath(path, state.currentId, state.selectedTarget)) {
-    invalidRetry('Line crossed/touched blocked area.');
-    return;
-  }
-
-  afterSuccessfulDraw(state.selectedTarget, path);
+  path.push(pointOnCircle(target, prev, target.r));
+  ws.send(JSON.stringify({ type: 'submit_path', path }));
 }
 
-function drawPath(points,color,width=3){
-  if(points.length<2) return;
+function drawPath(points, color, width = 3) {
+  if (points.length < 2) return;
   ctx.strokeStyle = color;
   ctx.lineWidth = width;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   ctx.beginPath();
-  ctx.moveTo(points[0].x,points[0].y);
-  for(let i=1;i<points.length;i++) ctx.lineTo(points[i].x,points[i].y);
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
   ctx.stroke();
 }
 
-function drawNode(p, active=false){
+function drawNode(p, active = false) {
   ctx.fillStyle = '#fff';
   ctx.strokeStyle = active ? '#f97316' : '#0f172a';
   ctx.lineWidth = active ? 3 : 2;
   ctx.beginPath();
-  ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+  ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
   ctx.fillStyle = '#0f172a';
@@ -342,41 +197,74 @@ function drawNode(p, active=false){
   ctx.fillText(String(p.id), p.x, p.y + 0.5);
 }
 
-function draw(){
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-
-  for(const line of state.lines){
-    drawPath(line.points, line.drawer === 'p1' ? '#2563eb' : '#16a34a', 3);
-  }
-  if(state.drawing) drawPath(state.drawing, '#dc2626', 2);
+function draw() {
+  const game = state.game;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (const line of game.lines) drawPath(line.points, line.drawer === 'p1' ? '#2563eb' : '#16a34a', 3);
+  if (state.drawing) drawPath(state.drawing, '#dc2626', 2);
 
   ctx.fillStyle = '#fde68a';
-  ctx.strokeStyle = state.selectedTarget === 'H' ? '#f97316' : '#7c2d12';
+  ctx.strokeStyle = game.selectedTarget === 'H' ? '#f97316' : '#7c2d12';
   ctx.lineWidth = 3;
   ctx.beginPath();
-  ctx.arc(HOUSE.x,HOUSE.y,HOUSE.r,0,Math.PI*2);
+  ctx.arc(HOUSE.x, HOUSE.y, HOUSE.r, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
   ctx.fillStyle = '#7c2d12';
   ctx.font = 'bold 12px Arial';
   ctx.textAlign = 'center';
-  ctx.fillText('CAT', HOUSE.x, HOUSE.y-4);
-  ctx.fillText('HOUSE', HOUSE.x, HOUSE.y+9);
+  ctx.fillText('CAT', HOUSE.x, HOUSE.y - 4);
+  ctx.fillText('HOUSE', HOUSE.x, HOUSE.y + 9);
 
-  POINTS.forEach(p => drawNode(p, state.selectedTarget === p.id));
+  POINTS.forEach(p => drawNode(p, game.selectedTarget === p.id));
+  updateTopTray();
 }
+
+ws.addEventListener('open', () => {
+  state.connected = true;
+  createRoomBtn.disabled = false;
+  joinRoomBtn.disabled = false;
+  setStatus('Connected. Create room or join with room code.');
+  updateTopTray();
+});
+
+ws.addEventListener('message', (event) => {
+  const msg = JSON.parse(event.data);
+  if (msg.type === 'error') return setStatus(msg.message);
+  if (msg.type === 'state') {
+    state.roomCode = msg.roomCode;
+    state.yourRole = msg.yourRole;
+    state.players = msg.players;
+    state.game = msg.game;
+    state.drawing = null;
+    draw();
+  }
+});
+
+ws.addEventListener('close', () => {
+  state.connected = false;
+  createRoomBtn.disabled = true;
+  joinRoomBtn.disabled = true;
+  setStatus('Disconnected from server. Refresh page.');
+  updateTopTray();
+});
+
+createRoomBtn.addEventListener('click', () => ws.send(JSON.stringify({ type: 'create_room' })));
+joinRoomBtn.addEventListener('click', () => ws.send(JSON.stringify({ type: 'join_room', roomCode: roomCodeInput.value.trim().toUpperCase() })));
+restartBtn.addEventListener('click', () => ws.send(JSON.stringify({ type: 'restart' })));
 
 canvas.addEventListener('click', boardClick);
 canvas.addEventListener('mousedown', startDraw);
 canvas.addEventListener('mousemove', moveDraw);
-canvas.addEventListener('mouseup', endDraw);
-canvas.addEventListener('mouseleave', endDraw);
-canvas.addEventListener('touchstart', e => { startDraw(e); e.preventDefault(); }, {passive:false});
-canvas.addEventListener('touchmove', e => { moveDraw(e); e.preventDefault(); }, {passive:false});
-canvas.addEventListener('touchend', e => { endDraw(e); e.preventDefault(); }, {passive:false});
-restartBtn.addEventListener('click', init);
+canvas.addEventListener('mouseup', finalizeDraw);
+canvas.addEventListener('mouseleave', finalizeDraw);
+canvas.addEventListener('touchstart', e => { startDraw(e); e.preventDefault(); }, { passive: false });
+canvas.addEventListener('touchmove', e => { moveDraw(e); e.preventDefault(); }, { passive: false });
+canvas.addEventListener('touchend', e => { finalizeDraw(e); e.preventDefault(); }, { passive: false });
 
-init();
+createRoomBtn.disabled = true;
+joinRoomBtn.disabled = true;
+draw();
 </script>
 </body>
 </html>
