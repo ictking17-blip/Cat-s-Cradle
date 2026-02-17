@@ -3,23 +3,90 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cat's Cradle Duel (Firebase Realtime DB)</title>
+  <title>Cat's Cradle Duel (Firebase RTDB)</title>
   <style>
     :root { color-scheme: light; }
-    body { margin:0; font-family:Inter,Arial,sans-serif; background:linear-gradient(180deg,#f0f4ff 0%,#f7fbff 100%); color:#14213d; display:flex; justify-content:center; min-height:100dvh; padding:calc(10px + env(safe-area-inset-top)) 10px calc(10px + env(safe-area-inset-bottom)); box-sizing:border-box; }
-    .app { width:min(560px,100%); display:flex; flex-direction:column; gap:10px; }
-    .top-tray { display:grid; grid-template-columns:1fr auto; gap:10px; align-items:center; background:#0f172a; color:#e2e8f0; border-radius:14px; padding:12px 14px; box-shadow:0 10px 24px rgba(15,23,42,.2); }
-    .pill-wrap { display:flex; gap:10px; flex-wrap:wrap; }
-    .pill { background:rgba(148,163,184,.22); border:1px solid rgba(148,163,184,.35); color:#f8fafc; border-radius:999px; padding:6px 10px; font-size:13px; font-weight:700; }
-    .pill strong { color:#93c5fd; }
-    .restart { border:0; border-radius:10px; background:#22c55e; color:#052e16; font-weight:800; padding:10px 12px; cursor:pointer; }
-    .panel { background:#fff; border-radius:14px; box-shadow:0 6px 20px rgba(0,0,0,.08); padding:10px; display:grid; gap:8px; }
-    .room-controls { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-    .room-controls button, .room-controls input { border-radius:10px; border:1px solid #cdd8ee; font-size:14px; padding:10px; box-sizing:border-box; }
-    .room-controls button { font-weight:700; background:#eef4ff; }
-    .status { margin:0; font-size:13px; line-height:1.35; background:#e8f0ff; padding:10px; border-radius:10px; border:1px solid #cfe0ff; }
-    canvas { width:100%; height:auto; max-height:calc(100dvh - 290px); touch-action:none; border-radius:10px; background:#fff; border:1px solid #e6ebf5; aspect-ratio:9/20; }
-    .small { font-size:12px; opacity:.8; margin:0; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, Arial, sans-serif;
+      background: linear-gradient(180deg, #eef3ff 0%, #f8fbff 100%);
+      color: #12213f;
+      min-height: 100dvh;
+      display: flex;
+      justify-content: center;
+      padding: calc(10px + env(safe-area-inset-top)) 10px calc(12px + env(safe-area-inset-bottom));
+    }
+    .app { width: min(560px, 100%); display: grid; gap: 10px; }
+    .top-tray {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      background: #0f172a;
+      border-radius: 14px;
+      padding: 12px;
+      color: #e2e8f0;
+      box-shadow: 0 10px 24px rgba(15, 23, 42, .18);
+      align-items: center;
+    }
+    .pill-wrap { display: flex; flex-wrap: wrap; gap: 8px; }
+    .pill {
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, .38);
+      background: rgba(148, 163, 184, .2);
+      padding: 6px 10px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #f8fafc;
+    }
+    .pill strong { color: #93c5fd; }
+    .restart {
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 13px;
+      background: #22c55e;
+      color: #052e16;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .panel {
+      background: #ffffff;
+      border-radius: 14px;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, .08);
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+    }
+    .room-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .room-controls button, .room-controls input, .status {
+      border-radius: 10px;
+      border: 1px solid #ccdaef;
+      font-size: 14px;
+      padding: 10px;
+      min-height: 42px;
+    }
+    .room-controls button {
+      background: #edf3ff;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .room-controls button:disabled { opacity: .55; cursor: not-allowed; }
+    .status {
+      margin: 0;
+      background: #e8f0ff;
+      line-height: 1.35;
+    }
+    .hint { margin: 0; font-size: 12px; opacity: .85; }
+    canvas {
+      width: 100%;
+      height: auto;
+      max-height: calc(100dvh - 290px);
+      border-radius: 10px;
+      border: 1px solid #e6ebf5;
+      background: #ffffff;
+      touch-action: none;
+      aspect-ratio: 9 / 20;
+    }
   </style>
 </head>
 <body>
@@ -41,7 +108,7 @@
       <button id="joinRoom">Join Room</button>
       <div id="roomLabel" class="status">No room yet.</div>
     </div>
-    <p class="small"><strong>Firebase Realtime DB mode:</strong> Create room and share code. The second player sees lines live.</p>
+    <p class="hint"><strong>Online:</strong> Create a room on one device, join from another device with code.</p>
   </div>
 
   <div class="panel">
@@ -50,16 +117,13 @@
   </div>
 </div>
 
-
 <script>
-  if (location.protocol === 'file:') {
-    window.__catsCradleFileMode = true;
-  }
+  if (location.protocol === 'file:') window.__catsCradleFileMode = true;
 </script>
 
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js';
-import { getDatabase, ref, get, set, update, onValue, runTransaction, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js';
+import { getDatabase, ref, get, set, update, onValue, runTransaction } from 'https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyB9B1ZXYPep-PeNeo_D35Kf1kofpB9GR3Q',
@@ -70,9 +134,6 @@ const firebaseConfig = {
   appId: '1:807058658558:web:060f0292e84b0bcfde81af',
   databaseURL: 'https://cats-cradle-10e30-default-rtdb.europe-west1.firebasedatabase.app'
 };
-
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
 
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
@@ -88,7 +149,7 @@ const roomCodeInput = document.getElementById('roomCodeInput');
 const roomLabel = document.getElementById('roomLabel');
 
 if (window.__catsCradleFileMode) {
-  const msg = 'You opened index.html directly. Room create/join needs a local server. Run: python3 -m http.server 4173 then open http://localhost:4173';
+  const msg = 'Opened with file://. Start local server: python3 -m http.server 4173 then open http://localhost:4173';
   statusEl.textContent = msg;
   connPillEl.innerHTML = '<strong>Realtime DB:</strong> Blocked on file://';
   createRoomBtn.disabled = true;
@@ -96,22 +157,27 @@ if (window.__catsCradleFileMode) {
   throw new Error(msg);
 }
 
-const HOUSE = { id: 'H', x: 350, y: 140, r: 24 };
-const deviceId = (() => {
-  const existing = localStorage.getItem('cats_cradle_device_id');
-  if (existing) return existing;
-  const value = crypto.randomUUID();
-  localStorage.setItem('cats_cradle_device_id', value);
-  return value;
-})();
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
 
+const HOUSE = { id: 'H', x: 350, y: 150, r: 28 };
 function createGridPoints() {
-  const columns = 3, rows = 4, left = 140, right = 560, top = 360, bottom = 1140;
+  const columns = 3;
+  const rows = 4;
+  const left = 155;
+  const right = 545;
+  const top = 360;
+  const bottom = 1170;
   const xStep = (right - left) / (columns - 1);
   const yStep = (bottom - top) / (rows - 1);
   const points = [];
   let id = 1;
-  for (let row = 0; row < rows; row++) for (let col = 0; col < columns; col++) points.push({ id: id++, x: left + xStep * col, y: top + yStep * row, r: 15 });
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < columns; col++) {
+      points.push({ id, x: left + xStep * col, y: top + yStep * row, r: 24 });
+      id += 1;
+    }
+  }
   return points;
 }
 const POINTS = createGridPoints();
@@ -129,8 +195,17 @@ function initialGame(waiting = false) {
   };
 }
 
+const deviceId = (() => {
+  const existing = localStorage.getItem('cats_cradle_device_id');
+  if (existing) return existing;
+  const fallback = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const value = crypto?.randomUUID ? crypto.randomUUID() : fallback;
+  localStorage.setItem('cats_cradle_device_id', value);
+  return value;
+})();
+
 const state = {
-  connected: true,
+  connected: false,
   roomCode: null,
   yourRole: null,
   players: { p1: false, p2: false },
@@ -140,16 +215,30 @@ const state = {
 };
 
 function label(playerId) { return playerId === 'p1' ? 'Player 1' : 'Player 2'; }
-function pointById(id) { return id === 'H' ? HOUSE : POINTS.find((p) => p.id === id); }
+function pointById(id) { return id === 'H' ? HOUSE : POINTS.find((p) => p.id === Number(id)); }
 function setStatus(msg) { statusEl.textContent = msg; }
+function canPlay() { return Boolean(state.roomCode && state.players.p1 && state.players.p2); }
+function roomPath(code) { return ref(db, `rooms/${code}`); }
+function randomCode() { return Math.random().toString(36).slice(2, 7).toUpperCase(); }
 function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+function determineRole(players) {
+  if (!players) return null;
+  if (players.p1 === deviceId) return 'p1';
+  if (players.p2 === deviceId) return 'p2';
+  return null;
+}
+function friendlyError(err, fallback) {
+  const message = String(err?.message || fallback);
+  if (message.includes('permission_denied')) return 'Permission denied. Paste Realtime DB rules from README and publish.';
+  if (message.includes('network')) return 'Network issue. Check internet connection and try again.';
+  return message;
+}
 function pointOnCircle(center, approachPoint, radius) {
   const dx = center.x - approachPoint.x;
   const dy = center.y - approachPoint.y;
   const len = Math.hypot(dx, dy) || 1;
   return { x: center.x - (dx / len) * radius, y: center.y - (dy / len) * radius };
 }
-function canPlay() { return state.roomCode && state.players.p1 && state.players.p2; }
 
 function toSegments(path) {
   const segs = [];
@@ -162,10 +251,12 @@ function segmentsIntersect(a, b, c, d) {
   return ccw(a, c, d) !== ccw(b, c, d) && ccw(a, b, c) !== ccw(a, b, d);
 }
 function isValidPath(game, path, fromId, toId) {
-  for (const p of path) if (p.x < 15 || p.y < 15 || p.x > 700 - 15 || p.y > 1560 - 15) return false;
-  const blocked = POINTS.filter((p) => p.id !== fromId && p.id !== toId);
   for (const p of path) {
-    for (const n of blocked) if (dist(p, n) < n.r + 5) return false;
+    if (p.x < 14 || p.y < 14 || p.x > canvas.width - 14 || p.y > canvas.height - 14) return false;
+  }
+  const blocked = POINTS.filter((p) => p.id !== Number(fromId) && p.id !== Number(toId));
+  for (const p of path) {
+    for (const node of blocked) if (dist(p, node) < node.r + 5) return false;
     if (fromId !== 'H' && toId !== 'H' && dist(p, HOUSE) < HOUSE.r + 6) return false;
   }
   const segs = toSegments(path);
@@ -180,24 +271,13 @@ function updateTopTray() {
   const game = state.game;
   connPillEl.innerHTML = `<strong>Realtime DB:</strong> ${state.connected ? 'Connected' : 'Offline'}`;
   turnPillEl.innerHTML = `<strong>Turn:</strong> ${label(game.caller)} calls → ${label(game.drawer)} draws`;
-  const targetLabel = game.selectedTarget == null ? 'None' : (game.selectedTarget === 'H' ? 'Cat House' : game.selectedTarget);
-  selectedPillEl.innerHTML = `<strong>Selected:</strong> ${targetLabel}`;
+  const selected = game.selectedTarget == null ? 'None' : (game.selectedTarget === 'H' ? 'Cat House' : game.selectedTarget);
+  selectedPillEl.innerHTML = `<strong>Selected:</strong> ${selected}`;
   rolePillEl.innerHTML = `<strong>You:</strong> ${state.yourRole ? label(state.yourRole) : '-'}`;
   roomLabel.textContent = state.roomCode ? `Room ${state.roomCode} • ${state.players.p1 ? 'P1✅' : 'P1❌'} ${state.players.p2 ? 'P2✅' : 'P2❌'}` : 'No room yet.';
-  setStatus(game.status || '');
 }
 
-function pointerPos(e) {
-  const rect = canvas.getBoundingClientRect();
-  const t = e.touches ? e.touches[0] : e;
-  return { x: (t.clientX - rect.left) * (canvas.width / rect.width), y: (t.clientY - rect.top) * (canvas.height / rect.height) };
-}
-function hitNode(pos) {
-  for (const p of POINTS) if (!state.game.visited.includes(p.id) && dist(pos, p) <= p.r + 12) return p;
-  return null;
-}
-
-function drawPath(points, color, width = 3) {
+function drawPath(points, color, width) {
   if (points.length < 2) return;
   ctx.strokeStyle = color;
   ctx.lineWidth = width;
@@ -208,196 +288,267 @@ function drawPath(points, color, width = 3) {
   for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
   ctx.stroke();
 }
-function drawNode(p, active = false) {
+function drawNode(point, active = false) {
   ctx.fillStyle = '#fff';
   ctx.strokeStyle = active ? '#f97316' : '#0f172a';
   ctx.lineWidth = active ? 3 : 2;
   ctx.beginPath();
-  ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+  ctx.arc(point.x, point.y, point.r, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
+
   ctx.fillStyle = '#0f172a';
-  ctx.font = 'bold 14px Arial';
+  ctx.font = '700 22px Arial';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(String(p.id), p.x, p.y + 0.5);
+  ctx.fillText(String(point.id), point.x, point.y + 1);
 }
 function draw() {
   const game = state.game;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  for (const line of game.lines || []) drawPath(line.points, line.drawer === 'p1' ? '#2563eb' : '#16a34a', 3);
+
+  for (const line of game.lines || []) drawPath(line.points, line.drawer === 'p1' ? '#2563eb' : '#16a34a', 2.5);
   if (state.drawing) drawPath(state.drawing, '#dc2626', 2);
 
   ctx.fillStyle = '#fde68a';
-  ctx.strokeStyle = game.selectedTarget === 'H' ? '#f97316' : '#7c2d12';
+  ctx.strokeStyle = game.selectedTarget === 'H' ? '#f97316' : '#92400e';
   ctx.lineWidth = 3;
   ctx.beginPath();
   ctx.arc(HOUSE.x, HOUSE.y, HOUSE.r, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
-  ctx.fillStyle = '#7c2d12';
-  ctx.font = 'bold 12px Arial';
-  ctx.textAlign = 'center';
-  ctx.fillText('CAT', HOUSE.x, HOUSE.y - 4);
-  ctx.fillText('HOUSE', HOUSE.x, HOUSE.y + 9);
 
-  POINTS.forEach((p) => drawNode(p, game.selectedTarget === p.id));
+  ctx.fillStyle = '#78350f';
+  ctx.font = '700 12px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('CAT', HOUSE.x, HOUSE.y - 5);
+  ctx.fillText('HOUSE', HOUSE.x, HOUSE.y + 8);
+
+  POINTS.forEach((point) => drawNode(point, game.selectedTarget === point.id));
   updateTopTray();
 }
 
-function roomPath(code) { return ref(db, `rooms/${code}`); }
-function randomCode() { return Math.random().toString(36).slice(2, 7).toUpperCase(); }
-function determineRole(players) {
-  if (!players) return null;
-  if (players.p1 === deviceId) return 'p1';
-  if (players.p2 === deviceId) return 'p2';
-  return null;
-}
-
 async function createRoom() {
-  let code = randomCode();
-  for (let i = 0; i < 6; i++) {
-    const r = roomPath(code);
-    const snap = await get(r);
-    if (!snap.exists()) {
-      await set(r, {
-        players: { p1: deviceId, p2: null },
-        game: initialGame(true),
-        updatedAt: serverTimestamp()
-      });
-      return joinRoomByCode(code);
+  createRoomBtn.disabled = true;
+  setStatus('Creating room...');
+  try {
+    let code = randomCode();
+    let available = false;
+    for (let i = 0; i < 8; i++) {
+      const snap = await get(roomPath(code));
+      if (!snap.exists()) {
+        available = true;
+        break;
+      }
+      code = randomCode();
     }
-    code = randomCode();
+    if (!available) throw new Error('Could not generate an empty room code. Please retry.');
+
+    await set(roomPath(code), {
+      players: { p1: deviceId, p2: null },
+      game: initialGame(true),
+      updatedAt: Date.now()
+    });
+
+    roomCodeInput.value = code;
+    subscribeRoom(code);
+    setStatus(`Room ${code} created. Share code with Player 2.`);
+  } catch (err) {
+    setStatus(friendlyError(err, 'Could not create room.'));
+  } finally {
+    createRoomBtn.disabled = false;
   }
-  setStatus('Could not create room. Retry.');
 }
 
 function subscribeRoom(code) {
   if (state.unsubscribe) state.unsubscribe();
   state.roomCode = code;
+  state.connected = false;
   state.unsubscribe = onValue(roomPath(code), (snap) => {
     state.connected = true;
     if (!snap.exists()) {
-      setStatus('Room no longer exists.');
+      setStatus('Room not found.');
+      state.roomCode = null;
+      draw();
       return;
     }
+
     const data = snap.val();
-    state.players = { p1: Boolean(data.players?.p1), p2: Boolean(data.players?.p2) };
-    state.yourRole = determineRole(data.players);
+    const players = data.players || {};
+    state.players = { p1: Boolean(players.p1), p2: Boolean(players.p2) };
+    state.yourRole = determineRole(players);
     state.game = data.game || initialGame();
     state.drawing = null;
     draw();
-  }, () => {
+  }, (err) => {
     state.connected = false;
-    setStatus('Realtime DB connection issue.');
-    updateTopTray();
+    setStatus(friendlyError(err, 'Realtime DB connection issue.'));
+    draw();
   });
 }
 
 async function joinRoomByCode(rawCode) {
   const code = String(rawCode || '').trim().toUpperCase();
-  if (!code) return;
-  const r = roomPath(code);
-  const result = await runTransaction(r, (current) => {
-    if (!current) return;
-    const players = current.players || {};
-    if (players.p1 !== deviceId && players.p2 !== deviceId) {
-      if (!players.p1) players.p1 = deviceId;
-      else if (!players.p2) players.p2 = deviceId;
-      else return; // abort
-    }
-    const bothReady = Boolean(players.p1 && players.p2);
-    const game = current.game || initialGame();
-    game.status = bothReady ? 'Player 1: select a number for Player 2 to draw.' : 'Waiting for Player 2 to join room...';
-    return { ...current, players, game, updatedAt: serverTimestamp() };
-  });
-
-  if (!result.committed) {
-    const existing = await get(r);
-    if (!existing.exists()) setStatus('Room code not found.');
-    else setStatus('Room is full or join failed.');
+  if (code.length !== 5) {
+    setStatus('Room code must be 5 characters.');
     return;
   }
-  subscribeRoom(code);
+
+  joinRoomBtn.disabled = true;
+  setStatus(`Joining room ${code}...`);
+  try {
+    let committed = false;
+    for (let attempt = 0; attempt < 4 && !committed; attempt++) {
+      const result = await runTransaction(roomPath(code), (current) => {
+        if (!current) return;
+        const players = current.players || {};
+
+        if (players.p1 !== deviceId && players.p2 !== deviceId) {
+          if (!players.p1) players.p1 = deviceId;
+          else if (!players.p2) players.p2 = deviceId;
+          else return;
+        }
+
+        const bothReady = Boolean(players.p1 && players.p2);
+        const game = current.game || initialGame();
+        game.status = bothReady ? 'Player 1: select a number for Player 2 to draw.' : 'Waiting for Player 2 to join room...';
+        return { ...current, players, game, updatedAt: Date.now() };
+      });
+      committed = Boolean(result?.committed);
+      if (!committed) await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+
+    if (!committed) {
+      const existing = await get(roomPath(code));
+      if (!existing.exists()) setStatus('Room code not found.');
+      else {
+        const players = existing.val()?.players || {};
+        const openSeat = !players.p1 || !players.p2 || players.p1 === deviceId || players.p2 === deviceId;
+        setStatus(openSeat ? 'Join retry failed. Tap Join Room again.' : 'Room is full.');
+      }
+      return;
+    }
+
+    roomCodeInput.value = code;
+    subscribeRoom(code);
+    setStatus(`Joined room ${code}.`);
+  } catch (err) {
+    setStatus(friendlyError(err, 'Join failed.'));
+  } finally {
+    joinRoomBtn.disabled = false;
+  }
 }
 
 async function submitSelection(targetId) {
   if (!state.roomCode) return;
-  await runTransaction(roomPath(state.roomCode), (current) => {
-    if (!current) return current;
-    const game = current.game || initialGame();
-    if (game.gameOver || game.selectedTarget != null) return current;
-    if (determineRole(current.players) !== game.caller) return current;
-    if ((game.visited || []).includes(targetId)) return current;
-    game.selectedTarget = targetId;
-    game.status = `${label(game.caller)} selected ${targetId}. ${label(game.drawer)} draw from ${game.currentId} to ${targetId}.`;
-    return { ...current, game, updatedAt: serverTimestamp() };
-  });
+  try {
+    await runTransaction(roomPath(state.roomCode), (current) => {
+      if (!current) return current;
+      const game = current.game || initialGame();
+      if (game.gameOver || game.selectedTarget != null) return current;
+      if (determineRole(current.players) !== game.caller) return current;
+      if ((game.visited || []).includes(targetId)) return current;
+
+      game.selectedTarget = targetId;
+      game.status = `${label(game.caller)} selected ${targetId}. ${label(game.drawer)} draw from ${game.currentId} to ${targetId}.`;
+      return { ...current, game, updatedAt: Date.now() };
+    });
+  } catch (err) {
+    setStatus(friendlyError(err, 'Could not select target.'));
+  }
 }
 
 async function submitPath(rawPath) {
   if (!state.roomCode) return;
-  await runTransaction(roomPath(state.roomCode), (current) => {
-    if (!current) return current;
-    const game = current.game || initialGame();
-    if (game.gameOver || game.selectedTarget == null) return current;
-    if (determineRole(current.players) !== game.drawer) return current;
+  try {
+    await runTransaction(roomPath(state.roomCode), (current) => {
+      if (!current) return current;
+      const game = current.game || initialGame();
+      if (game.gameOver || game.selectedTarget == null) return current;
+      if (determineRole(current.players) !== game.drawer) return current;
 
-    const from = pointById(game.currentId);
-    const target = pointById(game.selectedTarget);
-    const path = Array.isArray(rawPath) ? rawPath.map((p) => ({ x: Number(p.x), y: Number(p.y) })) : [];
-    if (path.length < 2) {
-      game.status = `Too short. Retry same turn: ${label(game.drawer)} draw again.`;
-      return { ...current, game, updatedAt: serverTimestamp() };
-    }
-    if (dist(path[0], from) > 1) path.unshift({ x: from.x, y: from.y });
-    const end = path[path.length - 1];
-    if (dist(end, target) > target.r + 16) {
-      game.status = `Path must end on ${game.selectedTarget === 'H' ? 'Cat House' : `number ${game.selectedTarget}`}. Retry same turn.`;
-      return { ...current, game, updatedAt: serverTimestamp() };
-    }
+      const from = pointById(game.currentId);
+      const target = pointById(game.selectedTarget);
+      const path = Array.isArray(rawPath) ? rawPath.map((p) => ({ x: Number(p.x), y: Number(p.y) })) : [];
+      if (path.length < 2) {
+        game.status = `Too short. Retry same turn: ${label(game.drawer)} draw again.`;
+        return { ...current, game, updatedAt: Date.now() };
+      }
 
-    const prev = path[path.length - 2] || path[0];
-    path.push(pointOnCircle(target, prev, target.r));
+      if (dist(path[0], from) > 1) path.unshift({ x: from.x, y: from.y });
+      const end = path[path.length - 1];
+      if (dist(end, target) > target.r + 16) {
+        game.status = `Path must end on ${game.selectedTarget === 'H' ? 'Cat House' : `number ${game.selectedTarget}`}. Retry same turn.`;
+        return { ...current, game, updatedAt: Date.now() };
+      }
 
-    if (!isValidPath(game, path, game.currentId, game.selectedTarget)) {
-      game.status = 'Line crossed/touched blocked area. Retry same turn.';
-      return { ...current, game, updatedAt: serverTimestamp() };
-    }
+      const prev = path[path.length - 2] || path[0];
+      path.push(pointOnCircle(target, prev, target.r));
 
-    const visited = [...(game.visited || [])];
-    const lines = [...(game.lines || [])];
-    lines.push({ fromId: game.currentId, toId: game.selectedTarget, drawer: game.drawer, points: path });
-    if (game.selectedTarget !== 'H') visited.push(game.selectedTarget);
+      if (!isValidPath(game, path, game.currentId, game.selectedTarget)) {
+        game.status = 'Line crossed/touched blocked area. Retry same turn.';
+        return { ...current, game, updatedAt: Date.now() };
+      }
 
-    game.lines = lines;
-    game.visited = visited;
-    game.currentId = game.selectedTarget;
+      const visited = [...(game.visited || [])];
+      const lines = [...(game.lines || [])];
+      lines.push({ fromId: game.currentId, toId: game.selectedTarget, drawer: game.drawer, points: path });
+      if (game.selectedTarget !== 'H') visited.push(game.selectedTarget);
 
-    if (game.selectedTarget === 'H' && visited.length === POINTS.length) {
-      game.gameOver = true;
-      game.status = `${label(game.drawer)} wins by connecting back to Cat House!`;
-      return { ...current, game, updatedAt: serverTimestamp() };
-    }
+      game.lines = lines;
+      game.visited = visited;
+      game.currentId = game.selectedTarget;
 
-    game.selectedTarget = null;
-    [game.caller, game.drawer] = [game.drawer, game.caller];
-    if (visited.length === POINTS.length) {
-      game.selectedTarget = 'H';
-      game.status = `${label(game.caller)} selected Cat House. ${label(game.drawer)} draw from ${game.currentId} back to Cat House.`;
-    } else {
-      game.status = `${label(game.caller)}: select a number for ${label(game.drawer)}.`;
-    }
-    return { ...current, game, updatedAt: serverTimestamp() };
-  });
+      if (game.selectedTarget === 'H' && visited.length === POINTS.length) {
+        game.gameOver = true;
+        game.status = `${label(game.drawer)} wins by connecting back to Cat House!`;
+        return { ...current, game, updatedAt: Date.now() };
+      }
+
+      game.selectedTarget = null;
+      [game.caller, game.drawer] = [game.drawer, game.caller];
+      if (visited.length === POINTS.length) {
+        game.selectedTarget = 'H';
+        game.status = `${label(game.caller)} selected Cat House. ${label(game.drawer)} draw from ${game.currentId} back to Cat House.`;
+      } else {
+        game.status = `${label(game.caller)}: select a number for ${label(game.drawer)}.`;
+      }
+      return { ...current, game, updatedAt: Date.now() };
+    });
+  } catch (err) {
+    setStatus(friendlyError(err, 'Could not submit draw.'));
+  }
 }
 
 async function restartRoom() {
-  if (!state.roomCode) return;
-  await update(roomPath(state.roomCode), {
-    game: initialGame(!(state.players.p1 && state.players.p2)),
-    updatedAt: serverTimestamp()
-  });
+  if (!state.roomCode) {
+    setStatus('Create or join a room first.');
+    return;
+  }
+  try {
+    await update(roomPath(state.roomCode), {
+      game: initialGame(!(state.players.p1 && state.players.p2)),
+      updatedAt: Date.now()
+    });
+  } catch (err) {
+    setStatus(friendlyError(err, 'Could not restart room.'));
+  }
+}
+
+function pointerPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const t = e.touches ? e.touches[0] : e;
+  return {
+    x: (t.clientX - rect.left) * (canvas.width / rect.width),
+    y: (t.clientY - rect.top) * (canvas.height / rect.height)
+  };
+}
+function hitNode(pos) {
+  for (const point of POINTS) {
+    if (!state.game.visited.includes(point.id) && dist(pos, point) <= point.r + 10) return point;
+  }
+  return null;
 }
 
 function boardClick(e) {
@@ -412,6 +563,7 @@ function startDraw(e) {
   if (!canPlay()) return;
   const game = state.game;
   if (game.gameOver || game.selectedTarget == null || state.yourRole !== game.drawer) return;
+
   const from = pointById(game.currentId);
   const pos = pointerPos(e);
   if (dist(pos, from) > from.r + 16) return;
@@ -422,25 +574,32 @@ function moveDraw(e) {
   if (!state.drawing) return;
   const pos = pointerPos(e);
   const last = state.drawing.at(-1);
-  if (dist(pos, last) > 3) {
-    state.drawing.push(pos);
-    const target = pointById(state.game.selectedTarget);
-    if (target && dist(pos, target) <= target.r + 2) return finalizeDraw();
+  if (dist(pos, last) <= 3) return;
+
+  state.drawing.push(pos);
+  const target = pointById(state.game.selectedTarget);
+  if (target && dist(pos, target) <= target.r + 2) {
+    finalizeDraw();
+    return;
   }
   draw();
 }
 
 function finalizeDraw() {
   if (!state.drawing) return;
+
   const game = state.game;
   const target = pointById(game.selectedTarget);
   const end = state.drawing.at(-1);
   const path = [...state.drawing];
   state.drawing = null;
+
   if (dist(end, target) > target.r + 16) {
     setStatus(`Path must end on ${game.selectedTarget === 'H' ? 'Cat House' : `number ${game.selectedTarget}`}. Retry same turn.`);
-    return draw();
+    draw();
+    return;
   }
+
   const prev = path[path.length - 2] || path[0];
   path.push(pointOnCircle(target, prev, target.r));
   submitPath(path);
@@ -448,6 +607,7 @@ function finalizeDraw() {
 
 createRoomBtn.addEventListener('click', createRoom);
 joinRoomBtn.addEventListener('click', () => joinRoomByCode(roomCodeInput.value));
+roomCodeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') joinRoomByCode(roomCodeInput.value); });
 restartBtn.addEventListener('click', restartRoom);
 
 canvas.addEventListener('click', boardClick);
@@ -457,7 +617,7 @@ canvas.addEventListener('mouseup', finalizeDraw);
 canvas.addEventListener('mouseleave', finalizeDraw);
 canvas.addEventListener('touchstart', (e) => { startDraw(e); e.preventDefault(); }, { passive: false });
 canvas.addEventListener('touchmove', (e) => { moveDraw(e); e.preventDefault(); }, { passive: false });
-canvas.addEventListener('touchend', (e) => { finalizeDraw(e); e.preventDefault(); }, { passive: false });
+canvas.addEventListener('touchend', (e) => { finalizeDraw(); e.preventDefault(); }, { passive: false });
 
 setStatus('Ready. Create room or join with code.');
 draw();

@@ -10,24 +10,22 @@ Serve this folder with any static server:
 python3 -m http.server 4173
 ```
 
-Open `http://localhost:4173`.
+Open:
+
+```text
+http://localhost:4173
+```
 
 > ⚠️ Do **not** open `index.html` by double-click (`file://...`).
-> Firebase room create/join will not work in that mode. Always run the local server command first.
+> Room create/join works only from `http://`/`https://`.
 
-## How to play online
+## Required Firebase settings (must be done)
 
-1. Player 1 taps **Create Room** and shares the room code.
-2. Player 2 enters the same code and taps **Join Room**.
-3. Caller selects a number node.
-4. Drawer draws from current node to selected target.
-5. Turns alternate after valid moves.
-6. Invalid draw retries same turn.
-7. After all numbers are connected, final return to Cat House wins.
+In Firebase Console for project `cats-cradle-10e30`:
 
-## Realtime Database rules (what to paste)
-
-In Firebase Console → Realtime Database → Rules, paste this while testing:
+1. Go to **Realtime Database** and click **Create Database** (if not already created).
+2. Select region (your project uses `europe-west1`).
+3. Open **Rules** tab and paste:
 
 ```json
 {
@@ -42,17 +40,23 @@ In Firebase Console → Realtime Database → Rules, paste this while testing:
 }
 ```
 
-> This is open test mode. For production, tighten rules.
+4. Click **Publish**.
+5. In **Project settings → General → Your apps → Authorized domains**, make sure `localhost` is allowed.
 
-## Deploy (free)
+## How to play online
 
-Use **Firebase Hosting**:
+1. Player 1 taps **Create Room** (a 5-char room code is generated).
+2. Player 1 shares the room code.
+3. Player 2 enters code and taps **Join Room**.
+4. Caller selects a number node.
+5. Drawer draws from current node to the selected target.
+6. Invalid draw retries same turn.
+7. After all numbers are connected, final return to Cat House wins.
 
-1. `npm i -g firebase-tools`
-2. `firebase login`
-3. `firebase init hosting` (select project `cats-cradle-10e30`)
-4. Public directory: `.`
-5. Single-page app rewrite: `No`
-6. `firebase deploy`
+## Troubleshooting
 
-Then open the hosting URL on both phones and play with room codes.
+- `GET /favicon.ico 404` in terminal is normal.
+- If buttons do not create/join room, open browser DevTools Console and check for `permission_denied` (rules not published yet).
+- Room codes are exactly 5 characters.
+- If numbers look distorted, reset browser zoom to 100% and hard refresh (`Ctrl+Shift+R`).
+- Make sure command is run in the folder that contains `index.html`.
