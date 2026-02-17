@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cat's Cradle Duel (Firebase Online)</title>
+  <title>Cat's Cradle Duel (Firebase Realtime DB)</title>
   <style>
     :root { color-scheme: light; }
     body { margin:0; font-family:Inter,Arial,sans-serif; background:linear-gradient(180deg,#f0f4ff 0%,#f7fbff 100%); color:#14213d; display:flex; justify-content:center; min-height:100dvh; padding:calc(10px + env(safe-area-inset-top)) 10px calc(10px + env(safe-area-inset-bottom)); box-sizing:border-box; }
@@ -29,7 +29,7 @@
       <div class="pill" id="turnPill">Turn: -</div>
       <div class="pill" id="selectedPill">Selected: -</div>
       <div class="pill" id="rolePill">Role: -</div>
-      <div class="pill" id="connPill">Firebase: Connecting...</div>
+      <div class="pill" id="connPill">Realtime DB: Connecting...</div>
     </div>
     <button id="restart" class="restart">Restart</button>
   </div>
@@ -41,7 +41,7 @@
       <button id="joinRoom">Join Room</button>
       <div id="roomLabel" class="status">No room yet.</div>
     </div>
-    <p class="small"><strong>Firebase online mode:</strong> Create room and share code with the second player.</p>
+    <p class="small"><strong>Firebase Realtime DB mode:</strong> Create room and share code. The second player sees lines live.</p>
   </div>
 
   <div class="panel">
@@ -52,7 +52,7 @@
 
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js';
-import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, runTransaction, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js';
+import { getDatabase, ref, get, set, update, onValue, runTransaction, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyB9B1ZXYPep-PeNeo_D35Kf1kofpB9GR3Q',
@@ -60,11 +60,12 @@ const firebaseConfig = {
   projectId: 'cats-cradle-10e30',
   storageBucket: 'cats-cradle-10e30.firebasestorage.app',
   messagingSenderId: '807058658558',
-  appId: '1:807058658558:web:060f0292e84b0bcfde81af'
+  appId: '1:807058658558:web:060f0292e84b0bcfde81af',
+  databaseURL: 'https://cats-cradle-10e30-default-rtdb.europe-west1.firebasedatabase.app'
 };
 
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+const db = getDatabase(app);
 
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
@@ -80,8 +81,6 @@ const roomCodeInput = document.getElementById('roomCodeInput');
 const roomLabel = document.getElementById('roomLabel');
 
 const HOUSE = { id: 'H', x: 350, y: 140, r: 24 };
-const ROOM_COLLECTION = 'rooms';
-
 const deviceId = (() => {
   const existing = localStorage.getItem('cats_cradle_device_id');
   if (existing) return existing;
@@ -121,7 +120,7 @@ const state = {
   players: { p1: false, p2: false },
   game: initialGame(),
   drawing: null,
-  unsub: null
+  unsubscribe: null
 };
 
 function label(playerId) { return playerId === 'p1' ? 'Player 1' : 'Player 2'; }
@@ -163,7 +162,7 @@ function isValidPath(game, path, fromId, toId) {
 
 function updateTopTray() {
   const game = state.game;
-  connPillEl.innerHTML = `<strong>Firebase:</strong> ${state.connected ? 'Connected' : 'Offline'}`;
+  connPillEl.innerHTML = `<strong>Realtime DB:</strong> ${state.connected ? 'Connected' : 'Offline'}`;
   turnPillEl.innerHTML = `<strong>Turn:</strong> ${label(game.caller)} calls → ${label(game.drawer)} draws`;
   const targetLabel = game.selectedTarget == null ? 'None' : (game.selectedTarget === 'H' ? 'Cat House' : game.selectedTarget);
   selectedPillEl.innerHTML = `<strong>Selected:</strong> ${targetLabel}`;
@@ -230,6 +229,8 @@ function draw() {
   updateTopTray();
 }
 
+function roomPath(code) { return ref(db, `rooms/${code}`); }
+function randomCode() { return Math.random().toString(36).slice(2, 7).toUpperCase(); }
 function determineRole(players) {
   if (!players) return null;
   if (players.p1 === deviceId) return 'p1';
@@ -237,63 +238,34 @@ function determineRole(players) {
   return null;
 }
 
-function roomRef(code) { return doc(db, ROOM_COLLECTION, code); }
-function randomCode() { return Math.random().toString(36).slice(2, 7).toUpperCase(); }
-
 async function createRoom() {
   let code = randomCode();
-  for (let i = 0; i < 5; i++) {
-    const ref = roomRef(code);
-    const snap = await getDoc(ref);
+  for (let i = 0; i < 6; i++) {
+    const r = roomPath(code);
+    const snap = await get(r);
     if (!snap.exists()) {
-      await setDoc(ref, {
+      await set(r, {
         players: { p1: deviceId, p2: null },
         game: initialGame(true),
-        createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
       return joinRoomByCode(code);
     }
     code = randomCode();
   }
-  setStatus('Could not create room. Try again.');
+  setStatus('Could not create room. Retry.');
 }
 
-async function joinRoomByCode(codeInput) {
-  const code = String(codeInput || '').trim().toUpperCase();
-  if (!code) return;
-  const ref = roomRef(code);
-  try {
-    await runTransaction(db, async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists()) throw new Error('Room code not found.');
-      const data = snap.data();
-      const players = data.players || {};
-      let next = { ...players };
-
-      if (players.p1 !== deviceId && players.p2 !== deviceId) {
-        if (!players.p1) next.p1 = deviceId;
-        else if (!players.p2) next.p2 = deviceId;
-        else throw new Error('Room already has 2 players.');
-      }
-      const bothReady = Boolean(next.p1 && next.p2);
-      const nextGame = { ...(data.game || initialGame()), status: bothReady ? 'Player 1: select a number for Player 2 to draw.' : 'Waiting for Player 2 to join room...' };
-      tx.update(ref, { players: next, game: nextGame, updatedAt: serverTimestamp() });
-    });
-  } catch (err) {
-    setStatus(err.message || 'Join failed.');
-    return;
-  }
-
-  if (state.unsub) state.unsub();
+function subscribeRoom(code) {
+  if (state.unsubscribe) state.unsubscribe();
   state.roomCode = code;
-  state.unsub = onSnapshot(ref, (snap) => {
+  state.unsubscribe = onValue(roomPath(code), (snap) => {
     state.connected = true;
     if (!snap.exists()) {
-      setStatus('Room deleted.');
+      setStatus('Room no longer exists.');
       return;
     }
-    const data = snap.data();
+    const data = snap.val();
     state.players = { p1: Boolean(data.players?.p1), p2: Boolean(data.players?.p2) };
     state.yourRole = determineRole(data.players);
     state.game = data.game || initialGame();
@@ -301,102 +273,115 @@ async function joinRoomByCode(codeInput) {
     draw();
   }, () => {
     state.connected = false;
+    setStatus('Realtime DB connection issue.');
     updateTopTray();
-    setStatus('Firebase connection issue. Retry.');
   });
+}
+
+async function joinRoomByCode(rawCode) {
+  const code = String(rawCode || '').trim().toUpperCase();
+  if (!code) return;
+  const r = roomPath(code);
+  const result = await runTransaction(r, (current) => {
+    if (!current) return;
+    const players = current.players || {};
+    if (players.p1 !== deviceId && players.p2 !== deviceId) {
+      if (!players.p1) players.p1 = deviceId;
+      else if (!players.p2) players.p2 = deviceId;
+      else return; // abort
+    }
+    const bothReady = Boolean(players.p1 && players.p2);
+    const game = current.game || initialGame();
+    game.status = bothReady ? 'Player 1: select a number for Player 2 to draw.' : 'Waiting for Player 2 to join room...';
+    return { ...current, players, game, updatedAt: serverTimestamp() };
+  });
+
+  if (!result.committed) {
+    const existing = await get(r);
+    if (!existing.exists()) setStatus('Room code not found.');
+    else setStatus('Room is full or join failed.');
+    return;
+  }
+  subscribeRoom(code);
 }
 
 async function submitSelection(targetId) {
   if (!state.roomCode) return;
-  const ref = roomRef(state.roomCode);
-  try {
-    await runTransaction(db, async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists()) throw new Error('Room not found.');
-      const data = snap.data();
-      const game = { ...(data.game || initialGame()) };
-      if (game.gameOver || game.selectedTarget != null) return;
-      if (determineRole(data.players) !== game.caller) return;
-      if ((game.visited || []).includes(targetId)) return;
-      game.selectedTarget = targetId;
-      game.status = `${label(game.caller)} selected ${targetId}. ${label(game.drawer)} draw from ${game.currentId} to ${targetId}.`;
-      tx.update(ref, { game, updatedAt: serverTimestamp() });
-    });
-  } catch (err) {
-    setStatus(err.message || 'Select failed.');
-  }
+  await runTransaction(roomPath(state.roomCode), (current) => {
+    if (!current) return current;
+    const game = current.game || initialGame();
+    if (game.gameOver || game.selectedTarget != null) return current;
+    if (determineRole(current.players) !== game.caller) return current;
+    if ((game.visited || []).includes(targetId)) return current;
+    game.selectedTarget = targetId;
+    game.status = `${label(game.caller)} selected ${targetId}. ${label(game.drawer)} draw from ${game.currentId} to ${targetId}.`;
+    return { ...current, game, updatedAt: serverTimestamp() };
+  });
 }
 
 async function submitPath(rawPath) {
   if (!state.roomCode) return;
-  const ref = roomRef(state.roomCode);
-  try {
-    await runTransaction(db, async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists()) throw new Error('Room not found.');
-      const data = snap.data();
-      const game = { ...(data.game || initialGame()) };
-      if (game.gameOver || game.selectedTarget == null) return;
-      if (determineRole(data.players) !== game.drawer) return;
+  await runTransaction(roomPath(state.roomCode), (current) => {
+    if (!current) return current;
+    const game = current.game || initialGame();
+    if (game.gameOver || game.selectedTarget == null) return current;
+    if (determineRole(current.players) !== game.drawer) return current;
 
-      const from = pointById(game.currentId);
-      const target = pointById(game.selectedTarget);
-      const path = Array.isArray(rawPath) ? rawPath.map((p) => ({ x: Number(p.x), y: Number(p.y) })) : [];
-      if (path.length < 2) {
-        game.status = `Too short. Retry same turn: ${label(game.drawer)} draw again.`;
-        tx.update(ref, { game, updatedAt: serverTimestamp() });
-        return;
-      }
-      if (dist(path[0], from) > 1) path.unshift({ x: from.x, y: from.y });
-      const end = path[path.length - 1];
-      if (dist(end, target) > target.r + 16) {
-        game.status = `Path must end on ${game.selectedTarget === 'H' ? 'Cat House' : `number ${game.selectedTarget}`}. Retry same turn.`;
-        tx.update(ref, { game, updatedAt: serverTimestamp() });
-        return;
-      }
+    const from = pointById(game.currentId);
+    const target = pointById(game.selectedTarget);
+    const path = Array.isArray(rawPath) ? rawPath.map((p) => ({ x: Number(p.x), y: Number(p.y) })) : [];
+    if (path.length < 2) {
+      game.status = `Too short. Retry same turn: ${label(game.drawer)} draw again.`;
+      return { ...current, game, updatedAt: serverTimestamp() };
+    }
+    if (dist(path[0], from) > 1) path.unshift({ x: from.x, y: from.y });
+    const end = path[path.length - 1];
+    if (dist(end, target) > target.r + 16) {
+      game.status = `Path must end on ${game.selectedTarget === 'H' ? 'Cat House' : `number ${game.selectedTarget}`}. Retry same turn.`;
+      return { ...current, game, updatedAt: serverTimestamp() };
+    }
 
-      const prev = path[path.length - 2] || path[0];
-      path.push(pointOnCircle(target, prev, target.r));
-      if (!isValidPath(game, path, game.currentId, game.selectedTarget)) {
-        game.status = 'Line crossed/touched blocked area. Retry same turn.';
-        tx.update(ref, { game, updatedAt: serverTimestamp() });
-        return;
-      }
+    const prev = path[path.length - 2] || path[0];
+    path.push(pointOnCircle(target, prev, target.r));
 
-      const lines = [...(game.lines || [])];
-      const visited = [...(game.visited || [])];
-      lines.push({ fromId: game.currentId, toId: game.selectedTarget, drawer: game.drawer, points: path });
-      if (game.selectedTarget !== 'H') visited.push(game.selectedTarget);
-      game.lines = lines;
-      game.visited = visited;
-      game.currentId = game.selectedTarget;
+    if (!isValidPath(game, path, game.currentId, game.selectedTarget)) {
+      game.status = 'Line crossed/touched blocked area. Retry same turn.';
+      return { ...current, game, updatedAt: serverTimestamp() };
+    }
 
-      if (game.selectedTarget === 'H' && visited.length === POINTS.length) {
-        game.gameOver = true;
-        game.status = `${label(game.drawer)} wins by connecting back to Cat House!`;
-        tx.update(ref, { game, updatedAt: serverTimestamp() });
-        return;
-      }
+    const visited = [...(game.visited || [])];
+    const lines = [...(game.lines || [])];
+    lines.push({ fromId: game.currentId, toId: game.selectedTarget, drawer: game.drawer, points: path });
+    if (game.selectedTarget !== 'H') visited.push(game.selectedTarget);
 
-      game.selectedTarget = null;
-      [game.caller, game.drawer] = [game.drawer, game.caller];
-      if (visited.length === POINTS.length) {
-        game.selectedTarget = 'H';
-        game.status = `${label(game.caller)} selected Cat House. ${label(game.drawer)} draw from ${game.currentId} back to Cat House.`;
-      } else {
-        game.status = `${label(game.caller)}: select a number for ${label(game.drawer)}.`;
-      }
-      tx.update(ref, { game, updatedAt: serverTimestamp() });
-    });
-  } catch (err) {
-    setStatus(err.message || 'Draw submit failed.');
-  }
+    game.lines = lines;
+    game.visited = visited;
+    game.currentId = game.selectedTarget;
+
+    if (game.selectedTarget === 'H' && visited.length === POINTS.length) {
+      game.gameOver = true;
+      game.status = `${label(game.drawer)} wins by connecting back to Cat House!`;
+      return { ...current, game, updatedAt: serverTimestamp() };
+    }
+
+    game.selectedTarget = null;
+    [game.caller, game.drawer] = [game.drawer, game.caller];
+    if (visited.length === POINTS.length) {
+      game.selectedTarget = 'H';
+      game.status = `${label(game.caller)} selected Cat House. ${label(game.drawer)} draw from ${game.currentId} back to Cat House.`;
+    } else {
+      game.status = `${label(game.caller)}: select a number for ${label(game.drawer)}.`;
+    }
+    return { ...current, game, updatedAt: serverTimestamp() };
+  });
 }
 
 async function restartRoom() {
   if (!state.roomCode) return;
-  const ref = roomRef(state.roomCode);
-  await updateDoc(ref, { game: initialGame(!(state.players.p1 && state.players.p2)), updatedAt: serverTimestamp() });
+  await update(roomPath(state.roomCode), {
+    game: initialGame(!(state.players.p1 && state.players.p2)),
+    updatedAt: serverTimestamp()
+  });
 }
 
 function boardClick(e) {

@@ -1,10 +1,10 @@
-# Cat's Cradle (Firebase Online Multiplayer)
+# Cat's Cradle (Firebase Realtime Database Multiplayer)
 
-Realtime 2-player Cat's Cradle game using **Firebase Firestore** (no custom Node server required).
+Realtime 2-player Cat's Cradle game using **Firebase Realtime Database**.
 
 ## Run locally
 
-Because Firebase SDK is loaded via browser modules, run any static server:
+Serve this folder with any static server:
 
 ```bash
 python3 -m http.server 4173
@@ -22,34 +22,34 @@ Open `http://localhost:4173`.
 6. Invalid draw retries same turn.
 7. After all numbers are connected, final return to Cat House wins.
 
-## Firebase setup required
+## Realtime Database rules (what to paste)
 
-This project is wired to your Firebase app config (`cats-cradle-10e30`).
+In Firebase Console → Realtime Database → Rules, paste this while testing:
 
-1. In Firebase Console, enable **Cloud Firestore** (production or test mode).
-2. Set Firestore rules for the `rooms` collection (example starter rules):
-
-```txt
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /rooms/{roomId} {
-      allow read, write: if true;
+```json
+{
+  "rules": {
+    "rooms": {
+      "$roomId": {
+        ".read": true,
+        ".write": true
+      }
     }
   }
 }
 ```
 
-> For production, tighten these rules with auth/validation.
+> This is open test mode. For production, tighten rules.
 
 ## Deploy (free)
 
-Best simple option: **Firebase Hosting**
+Use **Firebase Hosting**:
 
 1. `npm i -g firebase-tools`
 2. `firebase login`
-3. `firebase init hosting` (select existing project `cats-cradle-10e30`)
-4. Set public dir to `.` and configure as single-page app: `No`
-5. `firebase deploy`
+3. `firebase init hosting` (select project `cats-cradle-10e30`)
+4. Public directory: `.`
+5. Single-page app rewrite: `No`
+6. `firebase deploy`
 
-Then open hosting URL on both phones and play with room codes.
+Then open the hosting URL on both phones and play with room codes.
