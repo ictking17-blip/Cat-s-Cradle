@@ -13,6 +13,7 @@ Open `http://localhost:4173`.
 ## How to play
 
 - Two human players share one screen.
+- Mobile-friendly layout tuned for tall Android screens (including 1080x2436 class devices) while staying playable across different phone sizes.
 - Caller selects target by clicking the number node on the board.
 - Drawer draws from current node to selected target.
 - Roles alternate each valid move:
