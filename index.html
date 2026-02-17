@@ -66,6 +66,7 @@
     .btn-gray { background: #fff1e8; color: #9a3412; border: 1px solid #fdba74; }
 
     .room-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .room-wide { grid-column: 1 / -1; }
     .room-controls button, .room-controls input, .status {
       border-radius: 10px;
       border: 1px solid #ccdaef;
@@ -115,7 +116,8 @@
     <h3 style="margin:4px 0 2px;">Cat's Cradle Lobby</h3>
     <div class="room-controls">
       <button id="createRoom">Create Room</button>
-      <div id="lobbyRoomLabel" class="status">No room yet.</div>
+      <button id="copyLobbyCode">Copy Code</button>
+      <div id="lobbyRoomLabel" class="status room-wide">No room yet.</div>
       <button id="joinRoom">Join Room</button>
       <input id="roomCodeInput" maxlength="5" placeholder="Paste room code" />
     </div>
@@ -179,6 +181,7 @@ const turnPillEl = document.getElementById('turnPill');
 const selectedPillEl = document.getElementById('selectedPill');
 const rolePillEl = document.getElementById('rolePill');
 const createRoomBtn = document.getElementById('createRoom');
+const copyLobbyCodeBtn = document.getElementById('copyLobbyCode');
 const joinRoomBtn = document.getElementById('joinRoom');
 const roomCodeInput = document.getElementById('roomCodeInput');
 const hotspotsEl = document.getElementById('boardHotspots');
@@ -443,9 +446,8 @@ async function createRoom() {
     });
 
     roomCodeInput.value = code;
-    setLobbyStatus(`Room ${code} created. Share code with Player 2.`);
     subscribeRoom(code);
-    enterGamePage();
+    setLobbyStatus(`Room ${code} created. Copy code and wait for Player 2 to join.`);
   } catch (err) {
     logError('createRoom failed', err);
     setLobbyStatus(friendlyError(err, 'Could not create room.'));
@@ -479,6 +481,16 @@ function subscribeRoom(code) {
     state.game = data.game || initialGame();
     state.drawing = null;
     setStatus(state.game.status || 'Game ready.');
+
+    const bothReady = Boolean(players.p1 && players.p2);
+    if (bothReady) {
+      setLobbyStatus(`Both players joined room ${state.roomCode}. Starting game...`);
+      if (!state.inGamePage) enterGamePage();
+    } else {
+      setLobbyStatus(`Room ${state.roomCode} created. Waiting for Player 2 to join...`);
+      if (state.inGamePage) enterLobbyPage();
+    }
+
     draw();
     renderHotspots();
   }, (err) => {
@@ -546,9 +558,8 @@ async function joinRoomByCode(rawCode) {
     });
 
     roomCodeInput.value = code;
-    setLobbyStatus(`Joined room ${code}.`);
     subscribeRoom(code);
-    enterGamePage();
+    setLobbyStatus(`Joined room ${code}. Waiting for game start...`);
   } catch (err) {
     logError('joinRoomByCode failed', err);
     setLobbyStatus(friendlyError(err, 'Join failed.'));
@@ -674,6 +685,21 @@ function leaveRoom() {
   renderHotspots();
 }
 
+async function copyLobbyCode() {
+  const code = String(roomCodeInput.value || state.roomCode || '').trim().toUpperCase();
+  if (!code) {
+    setLobbyStatus('Create room first to copy code.');
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(code);
+    setLobbyStatus(`Copied room code: ${code}`);
+  } catch (err) {
+    logError('copyLobbyCode failed', err);
+    setLobbyStatus(`Room code: ${code}`);
+  }
+}
+
 function pointerPos(e) {
   const rect = canvas.getBoundingClientRect();
   const t = e.touches ? e.touches[0] : e;
@@ -735,6 +761,7 @@ function finalizeDraw() {
 }
 
 createRoomBtn.addEventListener('click', createRoom);
+copyLobbyCodeBtn.addEventListener('click', copyLobbyCode);
 joinRoomBtn.addEventListener('click', () => joinRoomByCode(roomCodeInput.value));
 roomCodeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') joinRoomByCode(roomCodeInput.value); });
 restartBtn.addEventListener('click', restartRoom);
