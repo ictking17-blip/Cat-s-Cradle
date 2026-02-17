@@ -50,6 +50,13 @@
   </div>
 </div>
 
+
+<script>
+  if (location.protocol === 'file:') {
+    window.__catsCradleFileMode = true;
+  }
+</script>
+
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js';
 import { getDatabase, ref, get, set, update, onValue, runTransaction, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js';
@@ -79,6 +86,15 @@ const createRoomBtn = document.getElementById('createRoom');
 const joinRoomBtn = document.getElementById('joinRoom');
 const roomCodeInput = document.getElementById('roomCodeInput');
 const roomLabel = document.getElementById('roomLabel');
+
+if (window.__catsCradleFileMode) {
+  const msg = 'You opened index.html directly. Room create/join needs a local server. Run: python3 -m http.server 4173 then open http://localhost:4173';
+  statusEl.textContent = msg;
+  connPillEl.innerHTML = '<strong>Realtime DB:</strong> Blocked on file://';
+  createRoomBtn.disabled = true;
+  joinRoomBtn.disabled = true;
+  throw new Error(msg);
+}
 
 const HOUSE = { id: 'H', x: 350, y: 140, r: 24 };
 const deviceId = (() => {

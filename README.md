@@ -12,6 +12,9 @@ python3 -m http.server 4173
 
 Open `http://localhost:4173`.
 
+> ⚠️ Do **not** open `index.html` by double-click (`file://...`).
+> Firebase room create/join will not work in that mode. Always run the local server command first.
+
 ## How to play online
 
 1. Player 1 taps **Create Room** and shares the room code.
