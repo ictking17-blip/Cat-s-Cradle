@@ -32,7 +32,7 @@
 
     .top-tray {
       display: grid;
-      grid-template-columns: 1fr auto;
+      grid-template-columns: 1fr;
       gap: 10px;
       background: linear-gradient(140deg, #f97316 0%, #ea580c 100%);
       border-radius: 14px;
@@ -41,7 +41,7 @@
       box-shadow: 0 10px 24px rgba(15, 23, 42, .18);
       align-items: center;
     }
-    .pill-wrap { display: flex; flex-wrap: wrap; gap: 8px; }
+    .pill-wrap { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; }
     .pill {
       border-radius: 999px;
       border: 1px solid rgba(255,255,255,.35);
@@ -53,7 +53,7 @@
     }
     .pill strong { color: #99f6e4; }
 
-    .actions { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; }
+    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .btn {
       border: 0;
       border-radius: 10px;
@@ -129,12 +129,10 @@
         <div class="pill" id="turnPill">Turn: -</div>
         <div class="pill" id="selectedPill">Selected: -</div>
         <div class="pill" id="rolePill">Role: -</div>
-        <div class="pill" id="connPill">Realtime DB: Connecting...</div>
       </div>
       <div class="actions">
         <button id="restart" class="btn btn-green">Restart</button>
-        <button id="copyCode" class="btn btn-gray">Copy Code</button>
-        <button id="leaveRoom" class="btn btn-gray">Leave</button>
+        <button id="leaveRoom" class="btn btn-gray">Leave Room</button>
       </div>
     </div>
 
@@ -176,23 +174,19 @@ const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
 const statusEl = document.getElementById('status');
 const restartBtn = document.getElementById('restart');
-const copyCodeBtn = document.getElementById('copyCode');
 const leaveRoomBtn = document.getElementById('leaveRoom');
 const turnPillEl = document.getElementById('turnPill');
 const selectedPillEl = document.getElementById('selectedPill');
 const rolePillEl = document.getElementById('rolePill');
-const connPillEl = document.getElementById('connPill');
 const createRoomBtn = document.getElementById('createRoom');
 const joinRoomBtn = document.getElementById('joinRoom');
 const roomCodeInput = document.getElementById('roomCodeInput');
 const hotspotsEl = document.getElementById('boardHotspots');
 
 if (window.__catsCradleFileMode) {
-  const msg = 'Opened with file://. Start local server: python3 -m http.server 4173 then open http://localhost:4173';
+  const msg = 'Opened by double click (file://). UI works, but online room sync may fail in some browsers. Prefer local server for multiplayer.';
   lobbyStatusEl.textContent = msg;
-  createRoomBtn.disabled = true;
-  joinRoomBtn.disabled = true;
-  throw new Error(msg);
+  console.warn('[CatGame] file mode', msg);
 }
 
 const app = initializeApp(firebaseConfig);
@@ -350,7 +344,6 @@ function renderHotspots() {
 
 function updateTopTray() {
   const game = state.game;
-  connPillEl.innerHTML = `<strong>Realtime DB:</strong> ${state.connected ? 'Connected' : 'Offline'}`;
   turnPillEl.innerHTML = `<strong>Turn:</strong> ${label(game.caller)} calls → ${label(game.drawer)} draws`;
   const selected = game.selectedTarget == null ? 'None' : (game.selectedTarget === 'H' ? 'Cat House' : game.selectedTarget);
   selectedPillEl.innerHTML = `<strong>Selected:</strong> ${selected}`;
@@ -389,23 +382,42 @@ function draw() {
   for (const line of game.lines || []) drawPath(line.points, line.drawer === 'p1' ? '#2563eb' : '#16a34a', 2.5);
   if (state.drawing) drawPath(state.drawing, '#dc2626', 2);
 
+  const t = performance.now() / 1000;
+  const pulse = Math.sin(t * 2.8) * 1.8;
+  const earWiggle = Math.sin(t * 3.6) * 2.2;
+  const hr = HOUSE.r + pulse;
+
   ctx.fillStyle = '#fde68a';
-  ctx.strokeStyle = game.selectedTarget === 'H' ? '#f97316' : '#92400e';
+  ctx.strokeStyle = game.selectedTarget === 'H' ? '#14b8a6' : '#92400e';
   ctx.lineWidth = 3;
   ctx.beginPath();
-  ctx.arc(HOUSE.x, HOUSE.y, HOUSE.r, 0, Math.PI * 2);
+  ctx.arc(HOUSE.x, HOUSE.y, hr, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
+
+  ctx.fillStyle = '#fcd34d';
+  ctx.beginPath();
+  ctx.moveTo(HOUSE.x - 14, HOUSE.y - hr + 6);
+  ctx.lineTo(HOUSE.x - 3 + earWiggle, HOUSE.y - hr - 11);
+  ctx.lineTo(HOUSE.x + 2, HOUSE.y - hr + 6);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(HOUSE.x + 14, HOUSE.y - hr + 6);
+  ctx.lineTo(HOUSE.x + 3 - earWiggle, HOUSE.y - hr - 11);
+  ctx.lineTo(HOUSE.x - 2, HOUSE.y - hr + 6);
+  ctx.closePath();
+  ctx.fill();
+
   ctx.fillStyle = '#78350f';
-  ctx.font = '700 12px Arial';
+  ctx.font = '700 12px Fredoka, Arial';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText('CAT', HOUSE.x, HOUSE.y - 5);
-  ctx.fillText('HOUSE', HOUSE.x, HOUSE.y + 8);
+  ctx.fillText('HOME', HOUSE.x, HOUSE.y + 8);
 
   POINTS.forEach((point) => drawNode(point, game.selectedTarget === point.id));
   updateTopTray();
-  renderHotspots();
 }
 
 async function createRoom() {
@@ -468,6 +480,7 @@ function subscribeRoom(code) {
     state.drawing = null;
     setStatus(state.game.status || 'Game ready.');
     draw();
+    renderHotspots();
   }, (err) => {
     state.connected = false;
     logError('room subscription error', err);
@@ -658,17 +671,7 @@ function leaveRoom() {
   setStatus('Left room.');
   enterLobbyPage();
   draw();
-}
-
-async function copyRoomCode() {
-  if (!state.roomCode) return;
-  try {
-    await navigator.clipboard.writeText(state.roomCode);
-    setStatus(`Copied room code: ${state.roomCode}`);
-  } catch (err) {
-    logError('copyRoomCode failed', err);
-    setStatus(`Room code: ${state.roomCode}`);
-  }
+  renderHotspots();
 }
 
 function pointerPos(e) {
@@ -679,69 +682,21 @@ function pointerPos(e) {
     y: (t.clientY - rect.top) * (canvas.height / rect.height)
   };
 }
-function hitNode(pos, relaxed = false) {
+function hitNode(pos) {
   const available = POINTS.filter((point) => !state.game.visited.includes(point.id));
   for (const point of available) {
-    if (dist(pos, point) <= point.r + 14) return point;
+    if (dist(pos, point) <= point.r + 12) return point;
   }
-  if (!relaxed || available.length === 0) return null;
-  let nearest = available[0];
-  let nearestDist = dist(pos, nearest);
-  for (let i = 1; i < available.length; i++) {
-    const d = dist(pos, available[i]);
-    if (d < nearestDist) {
-      nearestDist = d;
-      nearest = available[i];
-    }
-  }
-  return nearest;
-}
-
-
-function trySelectOnTouchStart(e) {
-  const game = state.game;
-  if (!state.roomCode) return false;
-  if (game.gameOver || game.selectedTarget != null || state.yourRole !== game.caller) return false;
-  const node = hitNode(pointerPos(e), true);
-  if (!node) return false;
-  submitSelection(node.id);
-  return true;
-}
-
-function handlePointerDown(e) {
-  if (!state.roomCode) return;
-  const game = state.game;
-  if (game.gameOver) return;
-
-  if (game.selectedTarget == null && state.yourRole === game.caller) {
-    const node = hitNode(pointerPos(e), true);
-    if (node) submitSelection(node.id);
-    return;
-  }
-  startDraw(e);
-}
-
-function boardClick(e) {
-  if (!state.roomCode) return;
-  const game = state.game;
-  if (game.gameOver || game.selectedTarget != null || state.yourRole !== game.caller) return;
-  const node = hitNode(pointerPos(e), true);
-  if (node) submitSelection(node.id);
+  return null;
 }
 
 function startDraw(e) {
   if (!state.roomCode) return;
   const game = state.game;
   if (game.gameOver) return;
+  if (game.selectedTarget == null || state.yourRole !== game.drawer) return;
 
   const pos = pointerPos(e);
-  if (game.selectedTarget == null && state.yourRole === game.caller) {
-    const node = hitNode(pos, true);
-    if (node) submitSelection(node.id);
-    return;
-  }
-
-  if (game.selectedTarget == null || state.yourRole !== game.drawer) return;
   const from = pointById(game.currentId);
   if (dist(pos, from) > from.r + 16) return;
   state.drawing = [{ x: from.x, y: from.y }];
@@ -759,6 +714,7 @@ function moveDraw(e) {
     return;
   }
   draw();
+  renderHotspots();
 }
 function finalizeDraw() {
   if (!state.drawing) return;
@@ -782,7 +738,6 @@ createRoomBtn.addEventListener('click', createRoom);
 joinRoomBtn.addEventListener('click', () => joinRoomByCode(roomCodeInput.value));
 roomCodeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') joinRoomByCode(roomCodeInput.value); });
 restartBtn.addEventListener('click', restartRoom);
-copyCodeBtn.addEventListener('click', copyRoomCode);
 leaveRoomBtn.addEventListener('click', leaveRoom);
 hotspotsEl.addEventListener('click', (e) => {
   const btn = e.target.closest('.hotspot-btn');
@@ -790,16 +745,11 @@ hotspotsEl.addEventListener('click', (e) => {
   submitSelection(Number(btn.dataset.id));
 });
 
-canvas.addEventListener('click', boardClick);
-canvas.addEventListener('pointerdown', (e) => { handlePointerDown(e); });
+canvas.addEventListener('pointerdown', (e) => { startDraw(e); });
 canvas.addEventListener('pointermove', (e) => { moveDraw(e); });
 canvas.addEventListener('pointerup', finalizeDraw);
 canvas.addEventListener('pointerleave', finalizeDraw);
-canvas.addEventListener('touchstart', (e) => {
-  const selectedByCaller = trySelectOnTouchStart(e);
-  if (!selectedByCaller) startDraw(e);
-  e.preventDefault();
-}, { passive: false });
+canvas.addEventListener('touchstart', (e) => { startDraw(e); e.preventDefault(); }, { passive: false });
 canvas.addEventListener('touchmove', (e) => { moveDraw(e); e.preventDefault(); }, { passive: false });
 canvas.addEventListener('touchend', (e) => { finalizeDraw(); e.preventDefault(); }, { passive: false });
 
@@ -807,6 +757,13 @@ setStatus('Waiting for room...');
 setLobbyStatus('Create a room or join with code.');
 enterLobbyPage();
 draw();
+renderHotspots();
+
+function frame() {
+  if (state.inGamePage) draw();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
 </script>
 </body>
 </html>
