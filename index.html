@@ -5,12 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Cat's Cradle Duel (Firebase RTDB)</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@500;700;800&display=swap');
     :root { color-scheme: light; }
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: Inter, Arial, sans-serif;
-      background: linear-gradient(180deg, #eef3ff 0%, #f8fbff 100%);
+      font-family: 'Nunito', Arial, sans-serif;
+      background: radial-gradient(circle at top, #fff0e8 0%, #ffe7da 35%, #ffd8c8 100%);
       color: #12213f;
       min-height: 100dvh;
       display: flex;
@@ -19,12 +20,13 @@
     }
     .app { width: min(560px, 100%); display: grid; gap: 10px; }
     .panel {
-      background: #ffffff;
-      border-radius: 14px;
-      box-shadow: 0 6px 20px rgba(0, 0, 0, .08);
-      padding: 10px;
+      background: #fff8f4;
+      border-radius: 18px;
+      border: 1px solid #ffd9c7;
+      box-shadow: 0 10px 28px rgba(233, 108, 65, .16);
+      padding: 12px;
       display: grid;
-      gap: 8px;
+      gap: 10px;
     }
     .hidden { display: none !important; }
 
@@ -32,24 +34,24 @@
       display: grid;
       grid-template-columns: 1fr auto;
       gap: 10px;
-      background: #0f172a;
+      background: linear-gradient(140deg, #f97316 0%, #ea580c 100%);
       border-radius: 14px;
       padding: 12px;
-      color: #e2e8f0;
+      color: #fff7ed;
       box-shadow: 0 10px 24px rgba(15, 23, 42, .18);
       align-items: center;
     }
     .pill-wrap { display: flex; flex-wrap: wrap; gap: 8px; }
     .pill {
       border-radius: 999px;
-      border: 1px solid rgba(148, 163, 184, .38);
-      background: rgba(148, 163, 184, .2);
+      border: 1px solid rgba(255,255,255,.35);
+      background: rgba(2,132,199,.26);
       padding: 6px 10px;
       font-size: 13px;
       font-weight: 700;
       color: #f8fafc;
     }
-    .pill strong { color: #93c5fd; }
+    .pill strong { color: #99f6e4; }
 
     .actions { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; }
     .btn {
@@ -60,8 +62,8 @@
       cursor: pointer;
       min-height: 42px;
     }
-    .btn-green { background: #22c55e; color: #052e16; }
-    .btn-gray { background: #dbe5f5; color: #13223f; }
+    .btn-green { background: #14b8a6; color: #042f2e; }
+    .btn-gray { background: #fff1e8; color: #9a3412; border: 1px solid #fdba74; }
 
     .room-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .room-controls button, .room-controls input, .status {
@@ -71,18 +73,21 @@
       padding: 10px;
       min-height: 42px;
     }
-    .room-controls button { background: #edf3ff; font-weight: 700; cursor: pointer; }
+    .room-controls button { background: #ffedd5; color:#9a3412; font-weight: 800; cursor: pointer; }
     .room-controls button:disabled { opacity: .55; cursor: not-allowed; }
-    .status { margin: 0; background: #e8f0ff; line-height: 1.35; }
+    .status { margin: 0; background: #fff2e9; border-color:#ffd1ba; line-height: 1.35; }
 
-    .hint { margin: 0; font-size: 12px; opacity: .85; }
+    .hint { margin: 0; font-size: 12px; opacity: .9; }
+    h3 { font-family: 'Fredoka', cursive; color: #9a3412; font-size: 26px; letter-spacing: .3px; }
+    .floating { animation: glowPulse 2.8s ease-in-out infinite; }
+    @keyframes glowPulse { 0%,100% { box-shadow: 0 10px 28px rgba(233, 108, 65, .14);} 50% { box-shadow: 0 14px 30px rgba(20, 184, 166, .18);} }
     canvas {
       width: 100%;
       height: auto;
       max-height: calc(100dvh - 250px);
       border-radius: 10px;
       border: 1px solid #e6ebf5;
-      background: #ffffff;
+      background: #fffaf7;
       touch-action: none;
       aspect-ratio: 9 / 20;
     }
@@ -90,8 +95,8 @@
 </head>
 <body>
 <div class="app">
-  <div id="lobbyPage" class="panel">
-    <h3 style="margin:4px 0 2px;">Online Room</h3>
+  <div id="lobbyPage" class="panel floating">
+    <h3 style="margin:4px 0 2px;">Cat's Cradle Lobby</h3>
     <div class="room-controls">
       <button id="createRoom">Create Room</button>
       <div id="lobbyRoomLabel" class="status">No room yet.</div>
@@ -131,6 +136,7 @@
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js';
 import { getDatabase, ref, get, set, update, onValue, runTransaction } from 'https://www.gstatic.com/firebasejs/12.9.0/firebase-database.js';
+import { animate, stagger } from 'https://esm.sh/framer-motion@11.3.19';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyB9B1ZXYPep-PeNeo_D35Kf1kofpB9GR3Q',
@@ -243,15 +249,34 @@ function friendlyError(err, fallback) {
   return message;
 }
 
+function runLobbyAnimations() {
+  try {
+    animate('#lobbyPage', { opacity: [0, 1], y: [18, 0] }, { duration: 0.45 });
+    animate('#lobbyPage .room-controls > *', { opacity: [0, 1], scale: [0.96, 1] }, { delay: stagger(0.05), duration: 0.35 });
+  } catch (err) {
+    logError('lobby animation failed', err);
+  }
+}
+function runGameAnimations() {
+  try {
+    animate('.top-tray', { opacity: [0, 1], y: [-14, 0] }, { duration: 0.4 });
+    animate('#status', { opacity: [0, 1], y: [12, 0] }, { duration: 0.35 });
+  } catch (err) {
+    logError('game animation failed', err);
+  }
+}
+
 function enterGamePage() {
   state.inGamePage = true;
   lobbyPage.classList.add('hidden');
   gamePage.classList.remove('hidden');
+  runGameAnimations();
 }
 function enterLobbyPage() {
   state.inGamePage = false;
   gamePage.classList.add('hidden');
   lobbyPage.classList.remove('hidden');
+  runLobbyAnimations();
 }
 
 function pointOnCircle(center, approachPoint, radius) {
@@ -485,11 +510,11 @@ async function joinRoomByCode(rawCode) {
 async function submitSelection(targetId) {
   if (!state.roomCode) return;
   try {
+    setStatus(`Selecting ${targetId}...`);
     await runTransaction(roomPath(state.roomCode), (current) => {
       if (!current) return current;
       const game = current.game || initialGame();
       if (game.gameOver || game.selectedTarget != null) return current;
-      if (determineRole(current.players) !== game.caller) return current;
       if ((game.visited || []).includes(targetId)) return current;
 
       game.selectedTarget = targetId;
@@ -505,11 +530,11 @@ async function submitSelection(targetId) {
 async function submitPath(rawPath) {
   if (!state.roomCode) return;
   try {
+    setStatus(`Selecting ${targetId}...`);
     await runTransaction(roomPath(state.roomCode), (current) => {
       if (!current) return current;
       const game = current.game || initialGame();
       if (game.gameOver || game.selectedTarget == null) return current;
-      if (determineRole(current.players) !== game.drawer) return current;
 
       const from = pointById(game.currentId);
       const target = pointById(game.selectedTarget);
@@ -616,28 +641,70 @@ function pointerPos(e) {
     y: (t.clientY - rect.top) * (canvas.height / rect.height)
   };
 }
-function hitNode(pos) {
-  for (const point of POINTS) {
-    if (!state.game.visited.includes(point.id) && dist(pos, point) <= point.r + 10) return point;
+function hitNode(pos, relaxed = false) {
+  const available = POINTS.filter((point) => !state.game.visited.includes(point.id));
+  for (const point of available) {
+    if (dist(pos, point) <= point.r + 14) return point;
   }
-  return null;
+  if (!relaxed || available.length === 0) return null;
+  let nearest = available[0];
+  let nearestDist = dist(pos, nearest);
+  for (let i = 1; i < available.length; i++) {
+    const d = dist(pos, available[i]);
+    if (d < nearestDist) {
+      nearestDist = d;
+      nearest = available[i];
+    }
+  }
+  return nearest;
+}
+
+
+function trySelectOnTouchStart(e) {
+  const game = state.game;
+  if (!state.roomCode) return false;
+  if (game.gameOver || game.selectedTarget != null || state.yourRole !== game.caller) return false;
+  const node = hitNode(pointerPos(e), true);
+  if (!node) return false;
+  submitSelection(node.id);
+  return true;
+}
+
+function handlePointerDown(e) {
+  if (!state.roomCode) return;
+  const game = state.game;
+  if (game.gameOver) return;
+
+  if (game.selectedTarget == null && state.yourRole === game.caller) {
+    const node = hitNode(pointerPos(e), true);
+    if (node) submitSelection(node.id);
+    return;
+  }
+  startDraw(e);
 }
 
 function boardClick(e) {
-  if (!canPlay()) return;
+  if (!state.roomCode) return;
   const game = state.game;
   if (game.gameOver || game.selectedTarget != null || state.yourRole !== game.caller) return;
-  const node = hitNode(pointerPos(e));
+  const node = hitNode(pointerPos(e), true);
   if (node) submitSelection(node.id);
 }
 
 function startDraw(e) {
-  if (!canPlay()) return;
+  if (!state.roomCode) return;
   const game = state.game;
-  if (game.gameOver || game.selectedTarget == null || state.yourRole !== game.drawer) return;
+  if (game.gameOver) return;
 
-  const from = pointById(game.currentId);
   const pos = pointerPos(e);
+  if (game.selectedTarget == null && state.yourRole === game.caller) {
+    const node = hitNode(pos, true);
+    if (node) submitSelection(node.id);
+    return;
+  }
+
+  if (game.selectedTarget == null || state.yourRole !== game.drawer) return;
+  const from = pointById(game.currentId);
   if (dist(pos, from) > from.r + 16) return;
   state.drawing = [{ x: from.x, y: from.y }];
 }
@@ -681,11 +748,15 @@ copyCodeBtn.addEventListener('click', copyRoomCode);
 leaveRoomBtn.addEventListener('click', leaveRoom);
 
 canvas.addEventListener('click', boardClick);
-canvas.addEventListener('mousedown', startDraw);
-canvas.addEventListener('mousemove', moveDraw);
-canvas.addEventListener('mouseup', finalizeDraw);
-canvas.addEventListener('mouseleave', finalizeDraw);
-canvas.addEventListener('touchstart', (e) => { startDraw(e); e.preventDefault(); }, { passive: false });
+canvas.addEventListener('pointerdown', (e) => { handlePointerDown(e); });
+canvas.addEventListener('pointermove', (e) => { moveDraw(e); });
+canvas.addEventListener('pointerup', finalizeDraw);
+canvas.addEventListener('pointerleave', finalizeDraw);
+canvas.addEventListener('touchstart', (e) => {
+  const selectedByCaller = trySelectOnTouchStart(e);
+  if (!selectedByCaller) startDraw(e);
+  e.preventDefault();
+}, { passive: false });
 canvas.addEventListener('touchmove', (e) => { moveDraw(e); e.preventDefault(); }, { passive: false });
 canvas.addEventListener('touchend', (e) => { finalizeDraw(); e.preventDefault(); }, { passive: false });
 
