@@ -81,18 +81,21 @@
     h3 { font-family: 'Fredoka', cursive; color: #9a3412; font-size: 26px; letter-spacing: .3px; }
     .floating { animation: glowPulse 2.8s ease-in-out infinite; }
     @keyframes glowPulse { 0%,100% { box-shadow: 0 10px 28px rgba(233, 108, 65, .14);} 50% { box-shadow: 0 14px 30px rgba(20, 184, 166, .18);} }
-    .caller-pad { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 6px; }
-    .call-num-btn {
-      border: 1px solid #fcb98b;
-      background: #fff7ed;
-      color: #9a3412;
-      border-radius: 10px;
-      min-height: 34px;
-      font-family: 'Fredoka', cursive;
-      font-size: 16px;
+    .board-wrap { position: relative; }
+    .hotspots { position: absolute; inset: 0; pointer-events: none; }
+    .hotspot-btn {
+      position: absolute;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      border: 2px solid rgba(15,23,42,.22);
+      background: rgba(255,255,255,.01);
+      color: transparent;
+      pointer-events: auto;
       cursor: pointer;
     }
-    .call-num-btn:disabled { opacity: .45; cursor: not-allowed; }
+    .hotspot-btn:disabled { pointer-events: none; opacity: .25; }
 
     canvas {
       width: 100%;
@@ -136,9 +139,11 @@
     </div>
 
     <div class="panel">
-      <canvas id="board" width="700" height="1560"></canvas>
+      <div class="board-wrap">
+        <canvas id="board" width="700" height="1560"></canvas>
+        <div id="boardHotspots" class="hotspots"></div>
+      </div>
       <div id="status" class="status"></div>
-      <div id="callerPad" class="caller-pad"></div>
     </div>
   </div>
 </div>
@@ -180,7 +185,7 @@ const connPillEl = document.getElementById('connPill');
 const createRoomBtn = document.getElementById('createRoom');
 const joinRoomBtn = document.getElementById('joinRoom');
 const roomCodeInput = document.getElementById('roomCodeInput');
-const callerPadEl = document.getElementById('callerPad');
+const hotspotsEl = document.getElementById('boardHotspots');
 
 if (window.__catsCradleFileMode) {
   const msg = 'Opened with file://. Start local server: python3 -m http.server 4173 then open http://localhost:4173';
@@ -327,19 +332,20 @@ function isValidPath(game, path, fromId, toId) {
   return true;
 }
 
-function renderCallerPad() {
+function renderHotspots() {
   const game = state.game;
   const isCallerTurn = state.yourRole === game.caller && game.selectedTarget == null && !game.gameOver;
   if (!state.roomCode || !isCallerTurn) {
-    callerPadEl.innerHTML = '';
-    callerPadEl.classList.add('hidden');
+    hotspotsEl.innerHTML = '';
     return;
   }
-
-  callerPadEl.classList.remove('hidden');
   const visited = new Set(game.visited || []);
-  const nums = POINTS.map((point) => point.id);
-  callerPadEl.innerHTML = nums.map((n) => `<button class="call-num-btn" data-num="${n}" ${visited.has(n) ? 'disabled' : ''}>${n}</button>`).join('');
+  hotspotsEl.innerHTML = POINTS.map((point) => {
+    const left = (point.x / 700) * 100;
+    const top = (point.y / 1560) * 100;
+    const disabled = visited.has(point.id) ? 'disabled' : '';
+    return `<button class="hotspot-btn" data-id="${point.id}" style="left:${left}%;top:${top}%;" ${disabled} aria-label="Select ${point.id}"></button>`;
+  }).join('');
 }
 
 function updateTopTray() {
@@ -399,7 +405,7 @@ function draw() {
 
   POINTS.forEach((point) => drawNode(point, game.selectedTarget === point.id));
   updateTopTray();
-  renderCallerPad();
+  renderHotspots();
 }
 
 async function createRoom() {
@@ -778,10 +784,10 @@ roomCodeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') joinRo
 restartBtn.addEventListener('click', restartRoom);
 copyCodeBtn.addEventListener('click', copyRoomCode);
 leaveRoomBtn.addEventListener('click', leaveRoom);
-callerPadEl.addEventListener('click', (e) => {
-  const btn = e.target.closest('.call-num-btn');
+hotspotsEl.addEventListener('click', (e) => {
+  const btn = e.target.closest('.hotspot-btn');
   if (!btn || btn.disabled) return;
-  submitSelection(Number(btn.dataset.num));
+  submitSelection(Number(btn.dataset.id));
 });
 
 canvas.addEventListener('click', boardClick);
