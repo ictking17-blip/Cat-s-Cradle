@@ -47,7 +47,7 @@ In Firebase Console for project `cats-cradle-10e30`:
 
 1. Player 1 taps **Create Room** (a 5-char room code is generated).
 2. Player 1 shares the room code.
-3. Player 2 enters code and taps **Join Room**.
+3. Player 2 pastes the code in the field next to **Join Room**, then taps **Join Room**.
 4. Caller selects a number node.
 5. Drawer draws from current node to the selected target.
 6. Invalid draw retries same turn.

@@ -58,6 +58,7 @@
       gap: 8px;
     }
     .room-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .room-status { grid-column: 1 / -1; }
     .room-controls button, .room-controls input, .status {
       border-radius: 10px;
       border: 1px solid #ccdaef;
@@ -104,9 +105,9 @@
   <div class="panel">
     <div class="room-controls">
       <button id="createRoom">Create Room</button>
-      <input id="roomCodeInput" maxlength="5" placeholder="Room code" />
+      <div id="roomLabel" class="status room-status">No room yet.</div>
       <button id="joinRoom">Join Room</button>
-      <div id="roomLabel" class="status">No room yet.</div>
+      <input id="roomCodeInput" maxlength="5" placeholder="Paste room code" />
     </div>
     <p class="hint"><strong>Online:</strong> Create a room on one device, join from another device with code.</p>
   </div>
