@@ -220,15 +220,17 @@ const state = {
   unsubscribe: null,
   inGamePage: false,
   rawInput: null,
-  offsetInput: null
+  offsetInput: null,
+  pointerDown: false,
+  activePointerId: null
 };
 
 const offsetConfig = {
   mode: 'px', // 'px' | 'cm'
-  offsetX: 0,
-  offsetY: -34,
-  offsetXcm: 0,
-  offsetYcm: -0.55,
+  offsetX: 22,
+  offsetY: -72,
+  offsetXcm: 0.35,
+  offsetYcm: -1.15,
   fallbackDpi: 160
 };
 
@@ -322,6 +324,14 @@ function setInputVisual(raw, adjusted) {
 function clearInputVisual() {
   state.rawInput = null;
   state.offsetInput = null;
+}
+function setPointerActive(pointerId) {
+  state.pointerDown = true;
+  state.activePointerId = pointerId;
+}
+function clearPointerActive() {
+  state.pointerDown = false;
+  state.activePointerId = null;
 }
 
 function pointOnCircle(center, approachPoint, radius) {
@@ -708,6 +718,8 @@ function leaveRoom() {
   state.players = { p1: false, p2: false };
   state.game = initialGame();
   state.drawing = null;
+  clearPointerActive();
+  clearInputVisual();
   setLobbyStatus('Left room. Create or join another room.');
   setStatus('Left room.');
   enterLobbyPage();
@@ -738,6 +750,10 @@ function hitNode(pos) {
 }
 
 function beginInput(e) {
+  setPointerActive(e.pointerId ?? 'mouse');
+  if (typeof canvas.setPointerCapture === 'function' && e.pointerId != null) {
+    canvas.setPointerCapture(e.pointerId);
+  }
   if (!state.roomCode) return;
   const game = state.game;
   const { raw, adjusted } = eventToPoints(e);
@@ -765,6 +781,8 @@ function startDraw(adjustedPos) {
 }
 
 function moveDraw(e) {
+  if (!state.pointerDown) return;
+  if (e.pointerId != null && state.activePointerId !== e.pointerId) return;
   const { raw, adjusted } = eventToPoints(e);
   setInputVisual(raw, adjusted);
 
@@ -785,6 +803,7 @@ function moveDraw(e) {
   draw();
 }
 function finalizeDraw() {
+  clearPointerActive();
   clearInputVisual();
   if (!state.drawing) return;
   const game = state.game;
@@ -802,6 +821,13 @@ function finalizeDraw() {
   path.push(pointOnCircle(target, prev, target.r));
   submitPath(path);
 }
+function cancelInput(e) {
+  if (e.pointerId != null && state.activePointerId !== e.pointerId) return;
+  clearPointerActive();
+  state.drawing = null;
+  clearInputVisual();
+  draw();
+}
 
 createRoomBtn.addEventListener('click', createRoom);
 copyLobbyCodeBtn.addEventListener('click', copyLobbyCode);
@@ -811,19 +837,22 @@ restartBtn.addEventListener('click', restartRoom);
 leaveRoomBtn.addEventListener('click', leaveRoom);
 
 if (window.PointerEvent) {
-  canvas.addEventListener('pointerdown', (e) => { beginInput(e); });
-  canvas.addEventListener('pointermove', (e) => { moveDraw(e); });
-  canvas.addEventListener('pointerup', finalizeDraw);
-  canvas.addEventListener('pointercancel', finalizeDraw);
-  canvas.addEventListener('pointerleave', finalizeDraw);
+  canvas.addEventListener('pointerdown', (e) => { beginInput(e); e.preventDefault(); });
+  canvas.addEventListener('pointermove', (e) => { moveDraw(e); e.preventDefault(); });
+  canvas.addEventListener('pointerup', (e) => {
+    if (e.pointerId != null && state.activePointerId !== e.pointerId) return;
+    finalizeDraw();
+  });
+  canvas.addEventListener('pointercancel', cancelInput);
 } else {
   canvas.addEventListener('mousedown', (e) => { beginInput(e); });
   canvas.addEventListener('mousemove', (e) => { moveDraw(e); });
   canvas.addEventListener('mouseup', finalizeDraw);
-  canvas.addEventListener('mouseleave', finalizeDraw);
+  canvas.addEventListener('mouseleave', cancelInput);
   canvas.addEventListener('touchstart', (e) => { beginInput(e); e.preventDefault(); }, { passive: false });
   canvas.addEventListener('touchmove', (e) => { moveDraw(e); e.preventDefault(); }, { passive: false });
   canvas.addEventListener('touchend', (e) => { finalizeDraw(); e.preventDefault(); }, { passive: false });
+  canvas.addEventListener('touchcancel', (e) => { cancelInput(e); e.preventDefault(); }, { passive: false });
 }
 
 setStatus('Waiting for room...');
