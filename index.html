@@ -16,17 +16,17 @@
       min-height: 100dvh;
       display: flex;
       justify-content: center;
-      padding: calc(10px + env(safe-area-inset-top)) 10px calc(12px + env(safe-area-inset-bottom));
+      padding: calc(4px + env(safe-area-inset-top)) 4px calc(6px + env(safe-area-inset-bottom));
     }
-    .app { width: min(560px, 100%); display: grid; gap: 10px; }
+    .app { width: min(620px, 100%); display: grid; gap: 6px; }
     .panel {
       background: #fff8f4;
       border-radius: 18px;
       border: 1px solid #ffd9c7;
       box-shadow: 0 10px 28px rgba(233, 108, 65, .16);
-      padding: 12px;
+      padding: 8px;
       display: grid;
-      gap: 10px;
+      gap: 6px;
     }
     .hidden { display: none !important; }
 
@@ -101,9 +101,9 @@
     canvas {
       width: 100%;
       height: auto;
-      max-height: calc(100dvh - 250px);
+      max-height: calc(100dvh - 190px);
       border-radius: 10px;
-      border: 1px solid #e6ebf5;
+      border: 0;
       background: #fffaf7;
       touch-action: none;
       aspect-ratio: 9 / 20;
@@ -312,19 +312,15 @@ function segmentsIntersect(a, b, c, d) {
   if ((a.x === c.x && a.y === c.y) || (a.x === d.x && a.y === d.y) || (b.x === c.x && b.y === c.y) || (b.x === d.x && b.y === d.y)) return false;
   return ccw(a, c, d) !== ccw(b, c, d) && ccw(a, b, c) !== ccw(a, b, d);
 }
-function isValidPath(game, path, fromId, toId) {
-  for (const p of path) {
-    if (p.x < 14 || p.y < 14 || p.x > canvas.width - 14 || p.y > canvas.height - 14) return false;
-  }
-  const blocked = POINTS.filter((p) => p.id !== Number(fromId) && p.id !== Number(toId));
-  for (const p of path) {
-    for (const node of blocked) if (dist(p, node) < node.r + 5) return false;
-    if (fromId !== 'H' && toId !== 'H' && dist(p, HOUSE) < HOUSE.r + 6) return false;
-  }
+function isValidPath(game, path) {
   const segs = toSegments(path);
   for (const line of game.lines || []) {
     const prev = toSegments(line.points || []);
-    for (const s1 of segs) for (const s2 of prev) if (segmentsIntersect(s1.a, s1.b, s2.a, s2.b)) return false;
+    for (const s1 of segs) {
+      for (const s2 of prev) {
+        if (segmentsIntersect(s1.a, s1.b, s2.a, s2.b)) return false;
+      }
+    }
   }
   return true;
 }
@@ -616,8 +612,8 @@ async function submitPath(rawPath) {
       const prev = path[path.length - 2] || path[0];
       path.push(pointOnCircle(target, prev, target.r));
 
-      if (!isValidPath(game, path, game.currentId, game.selectedTarget)) {
-        game.status = 'Line crossed/touched blocked area. Retry same turn.';
+      if (!isValidPath(game, path)) {
+        game.status = 'Line crossed/touched an existing line. Retry same turn.';
         return { ...current, game, updatedAt: Date.now() };
       }
 
