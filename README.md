@@ -1,50 +1,49 @@
-# Cat's Cradle (Firebase Realtime Database Multiplayer)
+# Cat's Cradle Duel
 
-Realtime 2-player Cat's Cradle game using **Firebase Realtime Database**.
+Plain HTML/CSS/JS implementation with a locked 9:16 board, offline-first rules engine, and Firebase-ready online room sync.
 
-## Run locally
+## Files in repo root
+- `index.html`
+- `style.css`
+- `app.js`
+- `README.md`
 
-```bash
-python3 -m http.server 4173
-```
+## GitHub Pages setup
+1. Push these files to `main` branch root.
+2. GitHub → **Settings** → **Pages**.
+3. Source: **Deploy from a branch**.
+4. Branch: `main`, folder `/root`.
 
-Open:
+## Locked game spec implemented
+- Portrait board with fixed 9:16 ratio.
+- Cat House `H` node at top center.
+- 12 numbered nodes arranged 4×3.
+- Turn model: Picker selects target, Drawer draws from current to target.
+- Offset pen cursor always on, adaptive to finger location.
+- Validation engine as pure functions in order:
+  - target selected
+  - start on current border (tolerance)
+  - end on target border (tolerance)
+  - no entering node circles except start/end allowances
+  - no crossing previous segments
+- Cancel on lift before valid target border completion.
+- Draw button: **No move possible → Draw**.
+- Win flow: after last number, must connect back to `H`.
 
-```text
-http://localhost:4173
-```
+## Architecture (do-not-break layering)
+- **engine/** concept inside `app.js`: `validateMove`, geometry helpers.
+- **input/** concept: pointer + adaptive offset pen conversion.
+- **render/** concept: board, nodes, moves, pen cursor.
+- **net/** concept: Firebase anonymous auth + RTDB room sync + live stroke replace mode.
 
-> ⚠️ Do **not** open `index.html` by double-click (`file://...`).
+## Constants
+- Node radius `R = 20px`
+- Border tolerance `T = 10px`
+- Line width `3px`
+- Sample distance `8px`
+- Live stroke update interval `100ms`
 
-## Required Firebase settings
-
-In Firebase Console for project `cats-cradle-10e30`:
-
-1. Realtime Database must be created.
-2. In Realtime Database → Rules, paste and publish:
-
-```json
-{
-  "rules": {
-    "rooms": {
-      "$roomId": {
-        ".read": true,
-        ".write": true
-      }
-    }
-  }
-}
-```
-
-## App flow (2 pages)
-
-1. **Lobby page**: both players can Create Room or Join Room.
-2. After successful create/join, app opens **Game page**.
-3. Game page has no create/join controls (only game UI + copy code + leave).
-
-## Troubleshooting
-
-- Open browser DevTools (`F12`) and check **Console** for `[CatGame] ...` logs.
-- `permission_denied` means rules are not published yet.
-- Room code must be exactly 5 characters.
-- `GET /favicon.ico 404` in terminal is normal.
+## Notes
+- `touch-action: none` disables page pan/zoom while playing.
+- Board coordinates are pixel-rendered and normalized placement is used for layout.
+- Firebase rules are not locked down in this prototype; secure rules should be added before public release.
