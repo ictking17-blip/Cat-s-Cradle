@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Cat's Cradle Duel</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div id="modeLabel" class="pill">Mode: Offline</div>
+      <div id="turnLabel" class="pill">Turn: Picker (P1)</div>
+      <div id="roleLabel" class="pill">You: P1</div>
+    </header>
+
+    <section class="lobby" id="lobby">
+      <button id="offlineBtn">Play Offline</button>
+      <button id="createRoomBtn">Create Room</button>
+      <button id="joinRoomBtn">Join Room</button>
+      <input id="roomCodeInput" maxlength="5" placeholder="Room code" />
+      <div id="roomInfo">No room connected.</div>
+    </section>
+
+    <section class="controls">
+      <button id="noMoveBtn">No move possible → Draw</button>
+      <button id="restartBtn">Restart</button>
+    </section>
+
+    <canvas id="gameCanvas"></canvas>
+    <p id="status" class="status">Ready.</p>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

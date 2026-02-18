@@ -1,0 +1,64 @@
+:root {
+  color-scheme: light;
+  --bg: #fff3ec;
+  --panel: #fffaf7;
+  --accent: #ea580c;
+  --ink: #1f2937;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: radial-gradient(circle at top, #ffe9db 0%, #ffdcca 60%, #ffd1b8 100%);
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+body {
+  touch-action: none;
+  overscroll-behavior: none;
+}
+.app-shell {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto auto auto 1fr auto;
+  gap: 8px;
+  padding: calc(env(safe-area-inset-top) + 8px) 8px calc(env(safe-area-inset-bottom) + 8px);
+}
+.topbar, .lobby, .controls {
+  display: grid;
+  gap: 8px;
+}
+.topbar { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.lobby { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.controls { grid-template-columns: 1fr 1fr; }
+.pill, button, input, #roomInfo, .status {
+  border: 1px solid #fed7aa;
+  background: var(--panel);
+  border-radius: 10px;
+  min-height: 40px;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--ink);
+}
+button {
+  font-weight: 700;
+  cursor: pointer;
+}
+button:hover { border-color: #fb923c; }
+#roomInfo { grid-column: 1 / -1; }
+#roomCodeInput { text-transform: uppercase; }
+canvas {
+  width: 100%;
+  height: 100%;
+  border-radius: 14px;
+  border: 1px solid #f5caa7;
+  background: #fff;
+  touch-action: none;
+}
+.status { margin: 0; }
+@media (max-width: 768px) {
+  .lobby { grid-template-columns: 1fr 1fr; }
+  #roomCodeInput, #roomInfo { grid-column: 1 / -1; }
+}
