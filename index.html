@@ -219,20 +219,10 @@ const state = {
   drawing: null,
   unsubscribe: null,
   inGamePage: false,
-  rawInput: null,
-  offsetInput: null,
   pointerDown: false,
   activePointerId: null
 };
 
-const offsetConfig = {
-  mode: 'px', // 'px' | 'cm'
-  offsetX: 22,
-  offsetY: -72,
-  offsetXcm: 0.35,
-  offsetYcm: -1.15,
-  fallbackDpi: 160
-};
 
 function logError(context, err) {
   console.error(`[CatGame] ${context}`, err);
@@ -289,41 +279,19 @@ function enterLobbyPage() {
   runLobbyAnimations();
 }
 
-function effectiveDpi() {
-  const guess = (window.devicePixelRatio || 1) * 96;
-  return Number.isFinite(guess) && guess > 0 ? guess : offsetConfig.fallbackDpi;
-}
-function getOffsetPixels() {
-  if (offsetConfig.mode === 'cm') {
-    const pxPerCm = effectiveDpi() / 2.54;
-    return { x: offsetConfig.offsetXcm * pxPerCm, y: offsetConfig.offsetYcm * pxPerCm };
-  }
-  return { x: offsetConfig.offsetX, y: offsetConfig.offsetY };
-}
 function clampPoint(p) {
   return {
     x: Math.max(0, Math.min(canvas.width, p.x)),
     y: Math.max(0, Math.min(canvas.height, p.y))
   };
 }
-function eventToPoints(e) {
+function eventToCanvasPoint(e) {
   const rect = canvas.getBoundingClientRect();
   const t = e.touches ? e.touches[0] : e;
-  const raw = {
+  return clampPoint({
     x: (t.clientX - rect.left) * (canvas.width / rect.width),
     y: (t.clientY - rect.top) * (canvas.height / rect.height)
-  };
-  const off = getOffsetPixels();
-  const adjusted = clampPoint({ x: raw.x + off.x, y: raw.y + off.y });
-  return { raw, adjusted };
-}
-function setInputVisual(raw, adjusted) {
-  state.rawInput = raw;
-  state.offsetInput = adjusted;
-}
-function clearInputVisual() {
-  state.rawInput = null;
-  state.offsetInput = null;
+  });
 }
 function setPointerActive(pointerId) {
   state.pointerDown = true;
@@ -439,27 +407,6 @@ function draw() {
 
   POINTS.forEach((point) => drawNode(point, game.selectedTarget === point.id));
 
-  if (state.offsetInput) {
-    ctx.fillStyle = '#14b8a6';
-    ctx.beginPath();
-    ctx.arc(state.offsetInput.x, state.offsetInput.y, 5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#0f766e';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(state.offsetInput.x, state.offsetInput.y, 11, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-  if (state.rawInput) {
-    ctx.font = '18px "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('🖊️', state.rawInput.x, state.rawInput.y - 16);
-    ctx.fillStyle = '#dc2626';
-    ctx.beginPath();
-    ctx.arc(state.rawInput.x, state.rawInput.y, 3, 0, Math.PI * 2);
-    ctx.fill();
-  }
 
   updateTopTray();
 }
@@ -719,7 +666,6 @@ function leaveRoom() {
   state.game = initialGame();
   state.drawing = null;
   clearPointerActive();
-  clearInputVisual();
   setLobbyStatus('Left room. Create or join another room.');
   setStatus('Left room.');
   enterLobbyPage();
@@ -756,17 +702,16 @@ function beginInput(e) {
   }
   if (!state.roomCode) return;
   const game = state.game;
-  const { raw, adjusted } = eventToPoints(e);
-  setInputVisual(raw, adjusted);
+  const pos = eventToCanvasPoint(e);
 
   if (!game.gameOver && game.selectedTarget == null && state.yourRole === game.caller) {
-    const node = hitNode(adjusted);
+    const node = hitNode(pos);
     if (node) submitSelection(node.id);
     draw();
     return;
   }
 
-  startDraw(adjusted);
+  startDraw(pos);
 }
 
 function startDraw(adjustedPos) {
@@ -783,8 +728,7 @@ function startDraw(adjustedPos) {
 function moveDraw(e) {
   if (!state.pointerDown) return;
   if (e.pointerId != null && state.activePointerId !== e.pointerId) return;
-  const { raw, adjusted } = eventToPoints(e);
-  setInputVisual(raw, adjusted);
+  const pos = eventToCanvasPoint(e);
 
   if (!state.drawing) {
     draw();
@@ -792,11 +736,11 @@ function moveDraw(e) {
   }
 
   const last = state.drawing.at(-1);
-  if (dist(adjusted, last) <= 3) return;
+  if (dist(pos, last) <= 3) return;
 
-  state.drawing.push(adjusted);
+  state.drawing.push(pos);
   const target = pointById(state.game.selectedTarget);
-  if (target && dist(adjusted, target) <= target.r + 2) {
+  if (target && dist(pos, target) <= target.r + 2) {
     finalizeDraw();
     return;
   }
@@ -804,7 +748,6 @@ function moveDraw(e) {
 }
 function finalizeDraw() {
   clearPointerActive();
-  clearInputVisual();
   if (!state.drawing) return;
   const game = state.game;
   const target = pointById(game.selectedTarget);
@@ -825,7 +768,6 @@ function cancelInput(e) {
   if (e.pointerId != null && state.activePointerId !== e.pointerId) return;
   clearPointerActive();
   state.drawing = null;
-  clearInputVisual();
   draw();
 }
 
